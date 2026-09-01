@@ -20,7 +20,7 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
-          targets: wasm32-unknown-unknown
+          targets: wasm32-unknown-unknown,wasm32v1-none
           components: rustfmt, clippy
 
       - name: Cache cargo
@@ -38,6 +38,9 @@ jobs:
 
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
+
+      - name: Build WASM (required by upgrade test)
+        run: cargo build -p paystream-stream --target wasm32v1-none --release
 
       - name: Test
         run: cargo test

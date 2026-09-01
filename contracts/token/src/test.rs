@@ -2,9 +2,9 @@
 
 #![cfg(test)]
 
-use soroban_sdk::{Address, Env};
-use soroban_sdk::testutils::Address as _;
 use crate::{TokenContract, TokenContractClient};
+use soroban_sdk::testutils::Address as _;
+use soroban_sdk::{Address, Env};
 
 fn setup() -> (Env, TokenContractClient<'static>) {
     let env = Env::default();

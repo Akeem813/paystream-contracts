@@ -4,6 +4,7 @@ build:
 	stellar contract build
 
 test:
+	cargo build -p paystream-stream --target wasm32v1-none --release
 	cargo test
 
 fmt:

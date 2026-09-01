@@ -2,14 +2,12 @@
 
 #![cfg(test)]
 
-use soroban_sdk::{
-    Address, Env,
-};
 use soroban_sdk::testutils::{Address as _, Ledger as _};
+use soroban_sdk::{Address, Env};
 
-use crate::{StreamContract, StreamContractClient};
-use crate::types::StreamStatus;
 use crate::storage;
+use crate::types::StreamStatus;
+use crate::{StreamContract, StreamContractClient};
 
 fn setup() -> (Env, StreamContractClient<'static>) {
     let env = Env::default();
@@ -462,7 +460,14 @@ fn test_create_stream_rate_too_high_rejected() {
 
     client.initialize(&admin);
     // 1_000_000_001 > MAX_RATE_PER_SECOND → E008
-    client.create_stream(&employer, &employee, &token_id, &1_000_000_000_000, &1_000_000_001, &0);
+    client.create_stream(
+        &employer,
+        &employee,
+        &token_id,
+        &1_000_000_000_000,
+        &1_000_000_001,
+        &0,
+    );
 }
 
 /// employer == employee must be rejected.
@@ -498,9 +503,7 @@ fn test_top_up_zero_amount_rejected() {
 // ---------------------------------------------------------------------------
 
 mod stream_wasm {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/paystream_stream.wasm"
-    );
+    soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/paystream_stream.wasm");
 }
 
 #[test]

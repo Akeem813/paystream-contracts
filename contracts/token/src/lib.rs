@@ -8,11 +8,11 @@ mod types;
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{contract, contractimpl, Address, Env};
 use crate::storage::{
-    allowance, balance_of, get_admin, set_admin, set_allowance,
-    set_balance, set_total_supply, total_supply,
+    allowance, balance_of, get_admin, set_admin, set_allowance, set_balance, set_total_supply,
+    total_supply,
 };
+use soroban_sdk::{contract, contractimpl, Address, Env};
 
 #[contract]
 pub struct TokenContract;
@@ -41,7 +41,9 @@ impl TokenContract {
     ///
     /// # Returns
     /// Current total supply as `i128`.
-    pub fn total_supply(env: Env) -> i128 { total_supply(&env) }
+    pub fn total_supply(env: Env) -> i128 {
+        total_supply(&env)
+    }
 
     /// Return the token balance of `owner`.
     ///
@@ -50,7 +52,9 @@ impl TokenContract {
     ///
     /// # Returns
     /// Balance as `i128`; 0 if the address has never held tokens.
-    pub fn balance(env: Env, owner: Address) -> i128 { balance_of(&env, &owner) }
+    pub fn balance(env: Env, owner: Address) -> i128 {
+        balance_of(&env, &owner)
+    }
 
     /// Transfer `amount` tokens from `from` to `to`.
     ///

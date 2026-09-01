@@ -12,10 +12,10 @@ mod test;
 
 use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Vec};
 use storage::{
-    claimable_amount, consume_admin_nonce, get_admin, get_admin_nonce, get_employee_streams,
-    get_employer_streams, get_min_deposit, index_employee_stream, index_employer_stream,
-    load_stream, next_id, save_stream, set_admin, set_min_deposit,
-    set_pending_admin, get_pending_admin, clear_pending_admin,
+    claimable_amount, clear_pending_admin, consume_admin_nonce, get_admin, get_admin_nonce,
+    get_employee_streams, get_employer_streams, get_min_deposit, get_pending_admin,
+    index_employee_stream, index_employer_stream, load_stream, next_id, save_stream, set_admin,
+    set_min_deposit, set_pending_admin,
 };
 use types::{
     DataKey, Stream, StreamParams, StreamStatus, ERR_REENTRANT, ERR_STREAM_CANCELLED,
@@ -183,7 +183,15 @@ impl StreamContract {
 
         let now = env.ledger().timestamp();
         let min_deposit = get_min_deposit(&env);
-        validate_create_stream(deposit, min_deposit, rate_per_second, stop_time, now, &employer, &employee);
+        validate_create_stream(
+            deposit,
+            min_deposit,
+            rate_per_second,
+            stop_time,
+            now,
+            &employer,
+            &employee,
+        );
 
         let token_client = token::Client::new(&env, &token_address);
         token_client.balance(&employer); // SEP-41 probe
@@ -242,7 +250,15 @@ impl StreamContract {
         let mut ids: Vec<u64> = Vec::new(&env);
 
         for p in params.iter() {
-            validate_create_stream(p.deposit, min_deposit, p.rate_per_second, p.stop_time, now, &employer, &p.employee);
+            validate_create_stream(
+                p.deposit,
+                min_deposit,
+                p.rate_per_second,
+                p.stop_time,
+                now,
+                &employer,
+                &p.employee,
+            );
 
             let token_client = token::Client::new(&env, &p.token);
             token_client.balance(&employer); // SEP-41 probe
@@ -352,8 +368,16 @@ impl StreamContract {
         validate_top_up(amount);
         let mut stream = load_stream(&env, stream_id).expect("stream not found");
         assert_eq!(stream.employer, employer, "not the employer");
-        assert!(stream.status != StreamStatus::Cancelled, "{}", ERR_STREAM_CANCELLED);
-        assert!(stream.status != StreamStatus::Exhausted, "{}", ERR_STREAM_EXHAUSTED);
+        assert!(
+            stream.status != StreamStatus::Cancelled,
+            "{}",
+            ERR_STREAM_CANCELLED
+        );
+        assert!(
+            stream.status != StreamStatus::Exhausted,
+            "{}",
+            ERR_STREAM_EXHAUSTED
+        );
 
         let token_client = token::Client::new(&env, &stream.token);
         token_client.transfer(&employer, &env.current_contract_address(), &amount);
@@ -442,14 +466,22 @@ impl StreamContract {
         let token_client = token::Client::new(&env, &stream.token);
 
         if claimable > 0 {
-            token_client.transfer(&env.current_contract_address(), &stream.employee, &claimable);
+            token_client.transfer(
+                &env.current_contract_address(),
+                &stream.employee,
+                &claimable,
+            );
             stream.withdrawn = stream
                 .withdrawn
                 .checked_add(claimable)
                 .expect("withdrawn overflow");
         }
 
-        let refund = stream.deposit.checked_sub(stream.withdrawn).unwrap_or(0).max(0);
+        let refund = stream
+            .deposit
+            .checked_sub(stream.withdrawn)
+            .unwrap_or(0)
+            .max(0);
         if refund > 0 {
             token_client.transfer(&env.current_contract_address(), &employer, &refund);
         }

@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::types::{ERR_BELOW_MIN_DEPOSIT, ERR_INVALID_RATE, ERR_ZERO_DEPOSIT, ERR_ZERO_RATE};
 use soroban_sdk::Address;
-use crate::types::{
-    ERR_ZERO_DEPOSIT, ERR_ZERO_RATE, ERR_BELOW_MIN_DEPOSIT, ERR_INVALID_RATE,
-};
 
 /// Maximum allowed rate_per_second (1 billion tokens/s — prevents overflow in
 /// claimable_amount for any realistic elapsed time up to ~292 years).
@@ -30,7 +28,11 @@ pub fn validate_create_stream(
     assert!(deposit > 0, "{}", ERR_ZERO_DEPOSIT);
     assert!(deposit >= min_deposit, "{}", ERR_BELOW_MIN_DEPOSIT);
     assert!(rate_per_second > 0, "{}", ERR_ZERO_RATE);
-    assert!(rate_per_second <= MAX_RATE_PER_SECOND, "{}", ERR_INVALID_RATE);
+    assert!(
+        rate_per_second <= MAX_RATE_PER_SECOND,
+        "{}",
+        ERR_INVALID_RATE
+    );
     if stop_time > 0 {
         assert!(stop_time > now, "stop_time must be in the future");
     }

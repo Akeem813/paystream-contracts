@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(unused_imports, dead_code)]
+
 use paystream_stream::storage::claimable_amount;
 use paystream_stream::types::{Stream, StreamStatus};
 use proptest::prelude::*;
-use soroban_sdk::{Address, Env};
 use soroban_sdk::testutils::Address as _;
+use soroban_sdk::{Address, Env};
 
 fn make_stream(
     env: &Env,
