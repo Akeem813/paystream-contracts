@@ -2,6 +2,10 @@
 
 #![cfg(test)]
 
+use soroban_sdk::{Address, Env};
+use soroban_sdk::testutils::Address as _;
+use crate::{TokenContract, TokenContractClient};
+
 fn setup() -> (Env, TokenContractClient<'static>) {
     let env = Env::default();
     env.mock_all_auths();

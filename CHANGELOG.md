@@ -43,5 +43,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `claimable_amount` uses `checked_mul` to prevent overflow; panics with `E004` on overflow (audit MED-01)
 - Reentrancy analysis documented; `locked` guard added as defence-in-depth (audit MED-02)
 
-[Unreleased]: https://github.com/Vera3289/paystream-contracts/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/Vera3289/paystream-contracts/releases/tag/v0.1.0
+[Unreleased]: https://github.com/veracindarella/paystream-contracts/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/veracindarella/paystream-contracts/releases/tag/v0.1.0

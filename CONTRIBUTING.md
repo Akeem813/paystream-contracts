@@ -48,7 +48,7 @@ source "$HOME/.cargo/env"
 cargo install --locked stellar-cli --version 22.0.0
 
 # 3. Clone and bootstrap
-git clone https://github.com/Vera3289/paystream-contracts.git
+git clone https://github.com/veracindarella/paystream-contracts.git
 cd paystream-contracts
 # rust-toolchain.toml handles the target and components automatically
 
@@ -74,7 +74,7 @@ sudo apt-get update && sudo apt-get install -y build-essential pkg-config libssl
 cargo install --locked stellar-cli --version 22.0.0
 
 # 4. Clone and bootstrap
-git clone https://github.com/Vera3289/paystream-contracts.git
+git clone https://github.com/veracindarella/paystream-contracts.git
 cd paystream-contracts
 
 # 5. Verify
@@ -109,7 +109,7 @@ sudo apt-get update && sudo apt-get install -y build-essential pkg-config libssl
 cargo install --locked stellar-cli --version 22.0.0
 
 # 5. Clone and bootstrap
-git clone https://github.com/Vera3289/paystream-contracts.git
+git clone https://github.com/veracindarella/paystream-contracts.git
 cd paystream-contracts
 
 # 6. Verify

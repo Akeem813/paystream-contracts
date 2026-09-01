@@ -3,8 +3,8 @@
 #![no_std]
 
 mod events;
-mod storage;
-mod types;
+pub mod storage;
+pub mod types;
 mod validate;
 
 #[cfg(test)]
@@ -15,10 +15,11 @@ use storage::{
     claimable_amount, consume_admin_nonce, get_admin, get_admin_nonce, get_employee_streams,
     get_employer_streams, get_min_deposit, index_employee_stream, index_employer_stream,
     load_stream, next_id, save_stream, set_admin, set_min_deposit,
+    set_pending_admin, get_pending_admin, clear_pending_admin,
 };
 use types::{
     DataKey, Stream, StreamParams, StreamStatus, ERR_REENTRANT, ERR_STREAM_CANCELLED,
-    ERR_STREAM_EXHAUSTED, ERR_ZERO_DEPOSIT, ERR_ZERO_RATE,
+    ERR_STREAM_EXHAUSTED, ERR_ZERO_DEPOSIT,
 };
 use validate::{validate_create_stream, validate_top_up};
 

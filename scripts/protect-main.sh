@@ -4,7 +4,7 @@
 # Usage: ./scripts/protect-main.sh [OWNER/REPO]
 set -euo pipefail
 
-REPO="${1:-Vera3289/paystream-contracts}"
+REPO="${1:-veracindarella/paystream-contracts}"
 
 echo "Applying branch protection to main on ${REPO}..."
 

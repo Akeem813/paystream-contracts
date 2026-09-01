@@ -1,6 +1,6 @@
 # PayStream Contracts
 
-[![CI](https://github.com/Vera3289/paystream-contracts/actions/workflows/ci.yml/badge.svg)](https://github.com/Vera3289/paystream-contracts/actions/workflows/ci.yml)
+[![CI](https://github.com/veracindarella/paystream-contracts/actions/workflows/ci.yml/badge.svg)](https://github.com/veracindarella/paystream-contracts/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 Soroban smart contracts for **PayStream** — decentralized payroll and salary streaming on the Stellar blockchain.
@@ -62,7 +62,7 @@ PayStream lets employers stream salaries to employees in real-time, per-second. 
 - [Stellar CLI](https://developers.stellar.org/docs/tools/developer-tools/cli/stellar-cli)
 
 ```bash
-git clone https://github.com/Vera3289/paystream-contracts.git
+git clone https://github.com/veracindarella/paystream-contracts.git
 cd paystream-contracts
 rustup target add wasm32-unknown-unknown
 ```
