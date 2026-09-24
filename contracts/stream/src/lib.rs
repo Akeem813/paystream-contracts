@@ -294,6 +294,8 @@ impl StreamContract {
     /// Claimable amount is `min((now - last_withdraw_time) * rate_per_second, remaining_deposit)`.
     /// Returns 0 without reverting if nothing is claimable yet.
     /// Marks the stream Exhausted when the full deposit has been withdrawn.
+    /// Also transitions the stream to Exhausted when `stop_time` has passed and
+    /// no tokens remain claimable (SC-02).
     ///
     /// # Parameters
     /// - `employee` — must match the stream's employee (requires auth)
@@ -320,7 +322,18 @@ impl StreamContract {
 
         let now = env.ledger().timestamp();
         let amount = claimable_amount(&stream, now);
+
+        // SC-02: if stop_time has passed and nothing is left to claim, settle
+        // the stream to Exhausted so off-chain indexers get an accurate status.
         if amount == 0 {
+            if stream.status == StreamStatus::Active
+                && stream.stop_time > 0
+                && now >= stream.stop_time
+            {
+                stream.status = StreamStatus::Exhausted;
+                save_stream(&env, &stream);
+                events::stream_status_changed(&env, stream_id, &StreamStatus::Exhausted);
+            }
             return 0;
         }
 
@@ -489,6 +502,40 @@ impl StreamContract {
         stream.status = StreamStatus::Cancelled;
         save_stream(&env, &stream);
         events::stream_status_changed(&env, stream_id, &StreamStatus::Cancelled);
+    }
+
+    /// Settle a stream that has passed its `stop_time` but whose status is still Active.
+    ///
+    /// Callable by anyone. Transitions the stream from Active to Exhausted when
+    /// `stop_time > 0 && now >= stop_time && claimable == 0`. This allows off-chain
+    /// indexers that rely on `status == Active` as a proxy for "has remaining value"
+    /// to get an accurate status without requiring the employee to call `withdraw`
+    /// (SC-02).
+    ///
+    /// # Parameters
+    /// - `stream_id` — ID of the stream to settle
+    ///
+    /// # Errors
+    /// - Panics if stream not found
+    /// - Panics if stream is not Active
+    /// - Panics if `stop_time` is 0 or has not yet been reached
+    /// - Panics if there are still tokens claimable (stream is not yet fully exhausted)
+    pub fn settle_stream(env: Env, stream_id: u64) {
+        let mut stream = load_stream(&env, stream_id).expect("stream not found");
+        assert_eq!(stream.status, StreamStatus::Active, "stream not active");
+
+        let now = env.ledger().timestamp();
+        assert!(
+            stream.stop_time > 0 && now >= stream.stop_time,
+            "stop_time not reached"
+        );
+
+        let remaining = claimable_amount(&stream, now);
+        assert!(remaining == 0, "stream still has claimable tokens");
+
+        stream.status = StreamStatus::Exhausted;
+        save_stream(&env, &stream);
+        events::stream_status_changed(&env, stream_id, &StreamStatus::Exhausted);
     }
 
     /// Read the full state of a stream by ID.

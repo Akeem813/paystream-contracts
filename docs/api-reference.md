@@ -363,6 +363,34 @@ stellar contract invoke --id <STREAM_ID> --source <EMPLOYER_KEY> --network testn
 
 ---
 
+### `settle_stream`
+
+Settle an Active stream whose `stop_time` has passed and has no remaining claimable tokens.
+Callable by anyone. Transitions the stream from Active to Exhausted so off-chain indexers
+receive an accurate status (SC-02).
+
+**Caller:** Anyone
+
+| Parameter | Type | Description |
+|---|---|---|
+| `stream_id` | `u64` | ID of the stream to settle |
+
+**Returns:** nothing
+
+**Errors:**
+- Panics if stream not found
+- Panics if stream is not Active
+- Panics with "stop_time not reached" if `stop_time` is 0 or current time < `stop_time`
+- Panics with "stream still has claimable tokens" if there are tokens remaining
+
+**Example:**
+```bash
+stellar contract invoke --id <STREAM_ID> --source <ANY_KEY> --network testnet \
+  -- settle_stream --stream_id 1
+```
+
+---
+
 ### `get_stream`
 
 Read the full state of a stream by ID.
@@ -797,6 +825,10 @@ stellar contract invoke --id <TOKEN_ID> --source <SPENDER_KEY> --network testnet
 ```
 Active → Paused → Active
 Active → Cancelled
-Active → Exhausted  (deposit fully streamed)
+Active → Exhausted  (deposit fully streamed, or stop_time passed with no remaining tokens)
 Paused → Cancelled
 ```
+
+`settle_stream` (callable by anyone) triggers the Active → Exhausted transition for streams
+whose `stop_time` has passed and whose deposit is fully streamed. `withdraw` performs the
+same transition automatically when called after `stop_time` with nothing left to claim.

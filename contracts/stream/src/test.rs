@@ -609,3 +609,106 @@ fn test_accept_admin_wrong_address_rejected() {
     client.propose_admin(&new_admin);
     client.accept_admin(&attacker); // wrong address
 }
+
+// ---------------------------------------------------------------------------
+// SC-02 – Auto-transition stream to Exhausted when stop_time passes
+// ---------------------------------------------------------------------------
+
+/// After stop_time passes and all tokens have been streamed, calling withdraw
+/// should transition the stream to Exhausted even if claimable == 0.
+#[test]
+fn test_withdraw_transitions_to_exhausted_after_stop_time() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    client.set_min_deposit(&admin, &0, &100);
+
+    // Stream that runs for exactly 50 seconds at 10 tokens/s → 500 total
+    let now = env.ledger().timestamp();
+    let stop = now + 50;
+    let id = client.create_stream(&employer, &employee, &token_id, &500, &10, &stop);
+
+    // Advance past stop_time — all tokens have been streamed
+    env.ledger().with_mut(|l| l.timestamp += 100);
+
+    // withdraw: claimable = 0 (capped at stop_time), but stop_time is past
+    // → stream must transition to Exhausted
+    let withdrawn = client.withdraw(&employee, &id);
+    assert_eq!(withdrawn, 500); // tokens earned up to stop_time
+    assert_eq!(client.get_stream(&id).status, StreamStatus::Exhausted);
+}
+
+/// settle_stream transitions an Active stream to Exhausted when stop_time has
+/// passed and no tokens remain claimable.
+#[test]
+fn test_settle_stream_transitions_to_exhausted() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    client.set_min_deposit(&admin, &0, &100);
+
+    let now = env.ledger().timestamp();
+    let stop = now + 50;
+    // Stream: 500 tokens, 10/s, 50-second window — deposit exactly matches
+    let id = client.create_stream(&employer, &employee, &token_id, &500, &10, &stop);
+
+    // Employee withdraws all earned tokens before calling settle
+    env.ledger().with_mut(|l| l.timestamp = stop);
+    client.withdraw(&employee, &id);
+
+    // Advance past stop_time
+    env.ledger().with_mut(|l| l.timestamp += 10);
+
+    // Anyone can call settle_stream to push status to Exhausted
+    client.settle_stream(&id);
+    assert_eq!(client.get_stream(&id).status, StreamStatus::Exhausted);
+}
+
+/// settle_stream must panic if stop_time has not yet been reached.
+#[test]
+#[should_panic(expected = "stop_time not reached")]
+fn test_settle_stream_before_stop_time_panics() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let now = env.ledger().timestamp();
+    let stop = now + 1000;
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &stop);
+    // stop_time not yet reached — must panic
+    client.settle_stream(&id);
+}
+
+/// settle_stream must panic if there are still claimable tokens.
+#[test]
+#[should_panic(expected = "stream still has claimable tokens")]
+fn test_settle_stream_with_claimable_tokens_panics() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    client.set_min_deposit(&admin, &0, &100);
+
+    let now = env.ledger().timestamp();
+    let stop = now + 50;
+    // Deposit more than stop_time * rate_per_second → tokens remain after stop
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &stop);
+
+    env.ledger().with_mut(|l| l.timestamp += 100);
+    // Still has 500 claimable tokens (10/s * 50s) — must panic
+    client.settle_stream(&id);
+}
