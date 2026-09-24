@@ -25,6 +25,30 @@ fn setup_token(env: &Env, admin: &Address) -> Address {
 }
 
 // ---------------------------------------------------------------------------
+// Issue #7 – Emit contract_initialized event in initialize
+// ---------------------------------------------------------------------------
+
+/// initialize must emit a contract_initialized event with the admin address.
+#[test]
+fn test_initialize_emits_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(StreamContract, ());
+    let client = StreamContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+
+    // Before initialize, no events
+    assert_eq!(env.events().all().len(), 0);
+
+    client.initialize(&admin);
+
+    // After initialize, exactly one event must have been emitted
+    let events = env.events().all();
+    assert_eq!(events.len(), 1, "expected exactly one event from initialize");
+}
+
+// ---------------------------------------------------------------------------
 // Existing tests (updated for nonce-aware admin calls)
 // ---------------------------------------------------------------------------
 

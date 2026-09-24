@@ -45,6 +45,10 @@ impl StreamContract {
     /// ability to pause/unpause the contract, set the minimum deposit, and
     /// perform upgrades.
     ///
+    /// Emits a `contract_initialized` event on success so off-chain indexers
+    /// can determine when and by whom the contract was initialised without
+    /// scanning raw ledger metadata.
+    ///
     /// # Parameters
     /// - `admin` — address that becomes the contract admin (requires auth)
     ///
@@ -53,6 +57,7 @@ impl StreamContract {
     pub fn initialize(env: Env, admin: Address) {
         admin.require_auth();
         set_admin(&env, &admin);
+        events::contract_initialized(&env, &admin);
     }
 
     /// Step 1 of two-step admin transfer: current admin proposes a new admin.

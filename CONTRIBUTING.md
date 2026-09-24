@@ -170,7 +170,7 @@ The `cargo-cache` volume persists across runs so subsequent builds are fast. WAS
 
 ### Contract-specific rules
 
-- Every state-changing function must emit an event via `events.rs`
+- Every state-changing function must emit an event via `events.rs` — this includes `initialize`, which must emit a `contract_initialized` event so off-chain indexers can determine when and by whom the contract was initialised
 - Authorization must be checked with `address.require_auth()` before any state mutation
 - Reentrancy guards (`stream.locked`) must be set before any cross-contract call and released after
 - New storage keys belong in the `DataKey` enum in `types.rs`
