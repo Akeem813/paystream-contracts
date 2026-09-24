@@ -20,6 +20,7 @@ Set the contract admin. Must be called once after deployment before any other fu
 
 **Errors:**
 - Panics if `admin` auth fails
+- Panics with "already initialized" if called more than once (SC-01 / LOW-02)
 
 **Example:**
 ```bash

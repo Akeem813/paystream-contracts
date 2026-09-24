@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- SC-01 (LOW-02): `initialize` now checks `env.storage().instance().has(&DataKey::Admin)` before
+  setting the admin; a second call panics with "already initialized", preventing ownership
+  hijacking without an explicit two-step transfer flow.
+
 ## [0.1.0] - 2026-04-24
 
 ### Added

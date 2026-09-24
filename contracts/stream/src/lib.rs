@@ -50,7 +50,12 @@ impl StreamContract {
     ///
     /// # Errors
     /// - Panics if `admin` auth fails
+    /// - Panics with "already initialized" if the contract has already been initialised
     pub fn initialize(env: Env, admin: Address) {
+        assert!(
+            !env.storage().instance().has(&DataKey::Admin),
+            "already initialized"
+        );
         admin.require_auth();
         set_admin(&env, &admin);
     }
