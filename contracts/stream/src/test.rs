@@ -609,3 +609,109 @@ fn test_accept_admin_wrong_address_rejected() {
     client.propose_admin(&new_admin);
     client.accept_admin(&attacker); // wrong address
 }
+
+// ---------------------------------------------------------------------------
+// Issue #5 – stream_count_by_employer and stream_count_by_employee views
+// ---------------------------------------------------------------------------
+
+/// stream_count_by_employer returns 0 for an address with no streams.
+#[test]
+fn test_stream_count_by_employer_zero_for_new_address() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    client.initialize(&admin);
+    assert_eq!(client.stream_count_by_employer(&employer), 0);
+}
+
+/// stream_count_by_employee returns 0 for an address with no streams.
+#[test]
+fn test_stream_count_by_employee_zero_for_new_address() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employee = Address::generate(&env);
+    client.initialize(&admin);
+    assert_eq!(client.stream_count_by_employee(&employee), 0);
+}
+
+/// stream_count_by_employer returns the correct count after stream creation.
+#[test]
+fn test_stream_count_by_employer_increments() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee1 = Address::generate(&env);
+    let employee2 = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    assert_eq!(client.stream_count_by_employer(&employer), 0);
+
+    client.create_stream(&employer, &employee1, &token_id, &10_000, &10, &0);
+    assert_eq!(client.stream_count_by_employer(&employer), 1);
+
+    client.create_stream(&employer, &employee2, &token_id, &10_000, &10, &0);
+    assert_eq!(client.stream_count_by_employer(&employer), 2);
+}
+
+/// stream_count_by_employee returns the correct count after stream creation.
+#[test]
+fn test_stream_count_by_employee_increments() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer1 = Address::generate(&env);
+    let employer2 = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id1 = setup_token(&env, &employer1);
+    let token_id2 = setup_token(&env, &employer2);
+
+    client.initialize(&admin);
+    assert_eq!(client.stream_count_by_employee(&employee), 0);
+
+    client.create_stream(&employer1, &employee, &token_id1, &10_000, &10, &0);
+    assert_eq!(client.stream_count_by_employee(&employee), 1);
+
+    client.create_stream(&employer2, &employee, &token_id2, &10_000, &10, &0);
+    assert_eq!(client.stream_count_by_employee(&employee), 2);
+}
+
+/// stream_count_by_employer count equals streams_by_employer length.
+#[test]
+fn test_stream_count_by_employer_matches_list_length() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee1 = Address::generate(&env);
+    let employee2 = Address::generate(&env);
+    let employee3 = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    client.create_stream(&employer, &employee1, &token_id, &10_000, &10, &0);
+    client.create_stream(&employer, &employee2, &token_id, &10_000, &10, &0);
+    client.create_stream(&employer, &employee3, &token_id, &10_000, &10, &0);
+
+    let count = client.stream_count_by_employer(&employer);
+    let list_len = client.streams_by_employer(&employer).len() as u64;
+    assert_eq!(count, list_len);
+    assert_eq!(count, 3);
+}
+
+/// stream_count_by_employee count equals streams_by_employee length.
+#[test]
+fn test_stream_count_by_employee_matches_list_length() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+    client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+
+    let count = client.stream_count_by_employee(&employee);
+    let list_len = client.streams_by_employee(&employee).len() as u64;
+    assert_eq!(count, list_len);
+    assert_eq!(count, 2);
+}
