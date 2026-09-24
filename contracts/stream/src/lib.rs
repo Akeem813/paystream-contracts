@@ -505,6 +505,27 @@ impl StreamContract {
         load_stream(&env, stream_id).expect("stream not found")
     }
 
+    /// Query only the status of a stream by ID.
+    ///
+    /// Lighter than [`get_stream`] because it loads the full [`Stream`] struct
+    /// from persistent storage but only returns the `status` field. Off-chain
+    /// indexers that poll many stream statuses frequently should prefer this
+    /// over `get_stream` to reduce resource consumption (SC-06).
+    ///
+    /// # Parameters
+    /// - `stream_id` — ID of the stream to query
+    ///
+    /// # Returns
+    /// The [`StreamStatus`] of the stream.
+    ///
+    /// # Errors
+    /// - Panics with "stream not found" if no stream exists for `stream_id`
+    pub fn stream_status(env: Env, stream_id: u64) -> StreamStatus {
+        load_stream(&env, stream_id)
+            .expect("stream not found")
+            .status
+    }
+
     /// Query how many tokens the employee can withdraw right now.
     ///
     /// Returns 0 for Cancelled or Exhausted streams.

@@ -403,6 +403,30 @@ stellar contract invoke --id <STREAM_ID> --source <ANY_KEY> --network testnet \
 
 ---
 
+### `stream_status`
+
+Query only the status of a stream by ID. Lighter than `get_stream` for read-heavy off-chain
+indexers that only need to know whether a stream is Active, Paused, Cancelled, or Exhausted (SC-06).
+
+**Caller:** Anyone
+
+| Parameter | Type | Description |
+|---|---|---|
+| `stream_id` | `u64` | ID of the stream to query |
+
+**Returns:** `StreamStatus` — one of `Active`, `Paused`, `Cancelled`, `Exhausted`
+
+**Errors:**
+- Panics with "stream not found" if no stream exists for `stream_id`
+
+**Example:**
+```bash
+stellar contract invoke --id <STREAM_ID> --source <ANY_KEY> --network testnet \
+  -- stream_status --stream_id 1
+```
+
+---
+
 ### `claimable`
 
 Query how many tokens the employee can withdraw right now.
