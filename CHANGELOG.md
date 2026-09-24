@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- SC-03: `cancel_streams_batch(employer, stream_ids)` — atomically cancels multiple streams
+  in one transaction. Each stream must belong to `employer` and be Active or Paused.
+  `employer.require_auth()` is called once. Events emitted per stream. Cheaper than N
+  individual `cancel_stream` calls for N ≥ 2.
+
 ## [0.1.0] - 2026-04-24
 
 ### Added
