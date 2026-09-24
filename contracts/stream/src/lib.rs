@@ -346,6 +346,80 @@ impl StreamContract {
         amount
     }
 
+    /// Employee withdraws all claimable tokens from every stream they receive.
+    ///
+    /// Iterates the employee's stream index and calls the withdraw logic on
+    /// each stream in a single transaction. Auth is checked once up front.
+    ///
+    /// Streams that are Cancelled or Paused are skipped without reverting.
+    /// Streams where the claimable amount is zero are also skipped.
+    ///
+    /// # Parameters
+    /// - `employee` — employee address; must authenticate (requires auth, called once)
+    ///
+    /// # Returns
+    /// `Vec<(u64, i128)>` — list of `(stream_id, amount_withdrawn)` pairs for
+    /// every stream from which tokens were actually transferred. Empty if
+    /// nothing was claimable.
+    ///
+    /// # Errors
+    /// - Panics if contract is paused
+    /// - E003 if a reentrant withdraw is detected on any stream
+    pub fn withdraw_all(env: Env, employee: Address) -> Vec<(u64, i128)> {
+        employee.require_auth();
+        assert!(!get_paused(&env), "contract is paused");
+
+        let stream_ids = get_employee_streams(&env, &employee);
+        let mut results: Vec<(u64, i128)> = Vec::new(&env);
+        let now = env.ledger().timestamp();
+
+        for stream_id in stream_ids.iter() {
+            let mut stream = match load_stream(&env, stream_id) {
+                Some(s) => s,
+                None => continue,
+            };
+
+            // Skip streams that cannot be withdrawn from
+            if stream.status == StreamStatus::Cancelled || stream.status == StreamStatus::Paused {
+                continue;
+            }
+
+            // Only Active and Exhausted streams are eligible
+            if stream.status != StreamStatus::Active && stream.status != StreamStatus::Exhausted {
+                continue;
+            }
+
+            let amount = claimable_amount(&stream, now);
+            if amount == 0 {
+                continue;
+            }
+
+            assert!(!stream.locked, "{}", ERR_REENTRANT);
+            stream.locked = true;
+            save_stream(&env, &stream);
+
+            stream.withdrawn = stream
+                .withdrawn
+                .checked_add(amount)
+                .expect("withdrawn overflow");
+            stream.last_withdraw_time = now;
+            if stream.withdrawn >= stream.deposit {
+                stream.status = StreamStatus::Exhausted;
+            }
+
+            let token_client = token::Client::new(&env, &stream.token);
+            token_client.transfer(&env.current_contract_address(), &employee, &amount);
+
+            stream.locked = false;
+            save_stream(&env, &stream);
+            events::withdrawn(&env, stream_id, &employee, amount);
+
+            results.push_back((stream_id, amount));
+        }
+
+        results
+    }
+
     /// Employer tops up an active stream with additional funds.
     ///
     /// Increases `deposit` by `amount`. The stream's rate and timeline are

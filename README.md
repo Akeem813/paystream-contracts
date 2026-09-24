@@ -120,6 +120,7 @@ The `cargo-cache` volume persists the Cargo registry between runs so subsequent 
 | `create_stream(employer, employee, token, deposit, rate_per_second, stop_time)` | Employer | Create stream, lock deposit |
 | `create_streams_batch(employer, params)` | Employer | Create multiple streams atomically; all succeed or all revert |
 | `withdraw(employee, stream_id)` | Employee | Withdraw all claimable earnings |
+| `withdraw_all(employee)` | Employee | Withdraw from all streams in one transaction |
 | `top_up(employer, stream_id, amount)` | Employer | Add more funds to active stream |
 | `pause_stream(employer, stream_id)` | Employer | Pause accrual |
 | `resume_stream(employer, stream_id)` | Employer | Resume accrual |
