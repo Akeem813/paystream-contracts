@@ -488,7 +488,7 @@ impl StreamContract {
 
         stream.status = StreamStatus::Cancelled;
         save_stream(&env, &stream);
-        events::stream_status_changed(&env, stream_id, &StreamStatus::Cancelled);
+        events::stream_cancelled(&env, stream_id, claimable, refund);
     }
 
     /// Read the full state of a stream by ID.
