@@ -537,6 +537,29 @@ fn test_migrate_noop() {
     client.migrate(&admin);
 }
 
+// ---------------------------------------------------------------------------
+// Issue #25 / #28 – Contract version storage
+// ---------------------------------------------------------------------------
+
+/// version() returns 0 before migrate has been called.
+#[test]
+fn test_version_default_before_migrate() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+    assert_eq!(client.version(), 0);
+}
+
+/// version() returns 1 after the first migrate call.
+#[test]
+fn test_version_returns_1_after_migrate() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+    client.migrate(&admin);
+    assert_eq!(client.version(), 1);
+}
+
 #[test]
 #[should_panic]
 fn test_upgrade_non_admin_rejected() {
