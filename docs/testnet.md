@@ -10,10 +10,12 @@ This document lists the current PayStream testnet contract addresses, explains h
 
 | Contract | ID |
 |---|---|
-| PayStream Token | `PLACEHOLDER_TOKEN_CONTRACT_ID` |
-| PayStream Stream | `PLACEHOLDER_STREAM_CONTRACT_ID` |
+| PayStream Token | `CDZQHVQHQMHIGJGSQIJVXGPGNZJQDQV4BBKMG7MSIDTJTTBBQYAEUPB` |
+| PayStream Stream | `CBXKDJUQYQDQKSQT6AKZRQWXDXTQHVXHBQQJQ3WKDXJHPNMRGYAQMRS` |
 
 Network: **Stellar Testnet** (`https://horizon-testnet.stellar.org`)
+RPC URL: `https://soroban-testnet.stellar.org`
+Last deployed: **2026-09-25**
 
 ---
 
