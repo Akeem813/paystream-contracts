@@ -483,6 +483,38 @@ fn test_create_stream_same_employer_employee_rejected() {
     client.create_stream(&employer, &employer, &token_id, &10_000, &1, &0);
 }
 
+// ---------------------------------------------------------------------------
+// Issue #68 – TEST-19: claimable returns accrued amount (not zero) after pause,
+// and does not increase further while stream remains paused.
+// ---------------------------------------------------------------------------
+
+/// After T=50 seconds of active streaming at rate 10, claimable should be 500.
+/// Pausing at that point should freeze claimable at 500 even after another
+/// T=100 seconds elapse while paused.
+#[test]
+fn test_claimable_frozen_after_pause() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+
+    // Advance 50 seconds — accrues 50 * 10 = 500
+    env.ledger().with_mut(|l| l.timestamp += 50);
+    assert_eq!(client.claimable(&id), 500);
+
+    // Pause the stream — claimable should still be 500 immediately after pause
+    client.pause_stream(&employer, &id);
+    assert_eq!(client.claimable(&id), 500);
+
+    // Advance another 100 seconds while paused — claimable must NOT increase
+    env.ledger().with_mut(|l| l.timestamp += 100);
+    assert_eq!(client.claimable(&id), 500);
+}
+
 /// top_up with amount = 0 must be rejected.
 #[test]
 #[should_panic(expected = "amount must be positive")]
