@@ -609,3 +609,66 @@ fn test_accept_admin_wrong_address_rejected() {
     client.propose_admin(&new_admin);
     client.accept_admin(&attacker); // wrong address
 }
+
+// ---------------------------------------------------------------------------
+// Issue #59 – TEST-10: top_up extends stream duration
+// ---------------------------------------------------------------------------
+
+/// Verify that a top_up increases the deposit and extends how long the stream
+/// runs past the point it would otherwise have been exhausted.
+///
+/// Timeline
+/// --------
+///   T=0   create stream  deposit=100, rate=10 (exhausts at T=10 without top-up)
+///   T=5   withdraw       claimable = 5×10 = 50; withdrawn=50, last_withdraw_time=5
+///   T=5   top_up +100    deposit=200; stream now exhausts at T=5+(150/10)=T=20
+///   T=15  claimable      (15-5)×10 = 100; remaining = 200-50 = 150 → claimable = 100
+///   T=20  withdraw       (20-5)×10 = 150 = remaining → stream exhausts, withdrawn = 200
+#[test]
+fn test_top_up_extends_stream_duration() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    client.set_min_deposit(&admin, &0, &100);
+
+    // T=0: create a stream that would exhaust at T=10 without a top-up.
+    let id = client.create_stream(&employer, &employee, &token_id, &100, &10, &0);
+    assert_eq!(client.get_stream(&id).deposit, 100);
+
+    // T=5: partial withdrawal — proves stream is active and accruing.
+    env.ledger().with_mut(|l| l.timestamp += 5);
+    let w1 = client.withdraw(&employee, &id);
+    assert_eq!(w1, 50, "5s × 10/s = 50 tokens earned");
+    assert_eq!(client.get_stream(&id).status, StreamStatus::Active);
+
+    // T=5: top-up — deposit grows from 100 to 200.
+    // Without this top-up the stream would be fully drained in 5 more seconds
+    // (T=10). With the top-up the remaining balance is 150, so it exhausts at
+    // T = 5 + 150/10 = T=20 — 10 seconds later than the original end.
+    client.top_up(&employer, &id, &100);
+    assert_eq!(client.get_stream(&id).deposit, 200);
+    assert_eq!(client.get_stream(&id).status, StreamStatus::Active);
+
+    // T=15: 10 seconds after the top-up; the original stream would have been
+    // fully exhausted by now, but the top-up kept it running.
+    env.ledger().with_mut(|l| l.timestamp += 10);
+    let claimable_t15 = client.claimable(&id);
+    // elapsed since last_withdraw_time(T=5) = 10s; 10×10 = 100
+    // remaining = 200 - 50 = 150; earned (100) < remaining → claimable = 100
+    assert_eq!(claimable_t15, 100, "stream still active past original T=10 exhaustion");
+    assert_eq!(client.get_stream(&id).status, StreamStatus::Active);
+
+    // T=20: stream reaches new exhaustion point.
+    env.ledger().with_mut(|l| l.timestamp += 5);
+    let w2 = client.withdraw(&employee, &id);
+    // elapsed since last_withdraw_time(T=5) = 15s; 15×10 = 150 = remaining
+    assert_eq!(w2, 150, "remaining 150 tokens drained at T=20");
+    assert_eq!(client.get_stream(&id).status, StreamStatus::Exhausted);
+
+    // Total withdrawn = 50 + 150 = 200 = full deposit.
+    assert_eq!(client.get_stream(&id).withdrawn, 200);
+}
