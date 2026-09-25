@@ -483,6 +483,24 @@ fn test_create_stream_same_employer_employee_rejected() {
     client.create_stream(&employer, &employer, &token_id, &10_000, &1, &0);
 }
 
+/// stop_time in the past must be rejected — issue #63 (TEST-14).
+#[test]
+#[should_panic(expected = "stop_time must be in the future")]
+fn test_create_stream_past_stop_time_rejected() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+
+    // Advance ledger so we have a non-zero "now", then set stop_time in the past.
+    env.ledger().with_mut(|l| l.timestamp = 1_000);
+    let past_stop_time = env.ledger().timestamp() - 1;
+    client.create_stream(&employer, &employee, &token_id, &10_000, &1, &past_stop_time);
+}
+
 /// top_up with amount = 0 must be rejected.
 #[test]
 #[should_panic(expected = "amount must be positive")]
