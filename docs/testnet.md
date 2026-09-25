@@ -136,6 +136,30 @@ stellar contract invoke \
 
 ---
 
+## End-to-End Lifecycle Test
+
+`scripts/e2e-test.sh` exercises the full payroll lifecycle against a real testnet:
+
+1. Builds both contracts
+2. Deploys token and stream contracts
+3. Initialises both contracts
+4. Generates employer and employee keypairs, funds via Friendbot
+5. Mints tokens to the employer
+6. Creates a stream (`rate_per_second=10`, `deposit=100000`)
+7. Waits 30 seconds for salary to accrue
+8. Withdraws claimable earnings and verifies the employee's balance increased
+9. Cancels the remaining stream
+
+The script exits non-zero on any failure.
+
+```bash
+export STELLAR_SOURCE_ACCOUNT=my-testnet-key
+export STELLAR_ADMIN_ADDRESS=<YOUR_PUBLIC_KEY>
+./scripts/e2e-test.sh
+```
+
+---
+
 ## Useful Links
 
 - Stellar Testnet Horizon: <https://horizon-testnet.stellar.org>
