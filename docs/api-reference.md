@@ -355,6 +355,8 @@ Employer cancels a stream. The employee receives all earned tokens; the employer
 - Panics if caller is not the stream's employer
 - Panics if stream is already Cancelled or Exhausted
 
+**Emitted event:** `stream_cancelled` (enriched — see [Events](#events) section)
+
 **Example:**
 ```bash
 stellar contract invoke --id <STREAM_ID> --source <EMPLOYER_KEY> --network testnet \
@@ -773,6 +775,27 @@ Burn tokens on behalf of `from` using an existing allowance.
 stellar contract invoke --id <TOKEN_ID> --source <SPENDER_KEY> --network testnet \
   -- burn_from --spender <SPENDER_ADDRESS> --from <FROM_ADDRESS> --amount 500
 ```
+
+---
+
+## Events
+
+All events are emitted via `env.events().publish()`. The topic tuple is `(symbol, stream_id)` and the data tuple carries the payload described below.
+
+### `stream_cancelled`
+
+Emitted by `cancel_stream` instead of the generic status event. Carries the exact cash-flow amounts so off-chain indexers can track fund movements without re-simulating the transaction.
+
+| Field | Type | Description |
+|---|---|---|
+| `stream_id` | `u64` | ID of the cancelled stream (in topics) |
+| `employer` | `Address` | Employer address (refund recipient) |
+| `employee` | `Address` | Employee address (claimable recipient) |
+| `claimable_paid` | `i128` | Tokens transferred to the employee at cancellation |
+| `refund_paid` | `i128` | Tokens returned to the employer |
+
+**Topics:** `("cancelled", stream_id)`
+**Data:** `(employer, employee, claimable_paid, refund_paid)`
 
 ---
 

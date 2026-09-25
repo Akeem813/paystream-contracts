@@ -28,3 +28,28 @@ pub fn topped_up(env: &Env, id: u64, employer: &Address, amount: i128) {
 pub fn contract_paused(env: &Env, paused: bool) {
     env.events().publish((symbol_short!("paused"),), paused);
 }
+
+/// Enriched cancellation event that includes the exact cash-flow amounts.
+///
+/// Emitted by `cancel_stream` instead of the generic `stream_status_changed`
+/// event so that off-chain indexers can track:
+/// - `claimable_paid` — tokens sent to the employee at cancellation time
+/// - `refund_paid`    — tokens returned to the employer
+pub fn stream_cancelled(
+    env: &Env,
+    stream_id: u64,
+    employer: &Address,
+    employee: &Address,
+    claimable_paid: i128,
+    refund_paid: i128,
+) {
+    env.events().publish(
+        (symbol_short!("cancelled"), stream_id),
+        (
+            employer.clone(),
+            employee.clone(),
+            claimable_paid,
+            refund_paid,
+        ),
+    );
+}

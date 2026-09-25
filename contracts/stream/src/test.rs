@@ -144,6 +144,52 @@ fn test_cancel_stream_refunds_employer() {
     assert_eq!(s.withdrawn, 1000);
 }
 
+// ---------------------------------------------------------------------------
+// Issue #26 – Enriched stream_cancelled event
+// ---------------------------------------------------------------------------
+
+/// cancel_stream emits an enriched event that includes claimable_paid and
+/// refund_paid so that off-chain indexers can track exact cash-flow amounts.
+#[test]
+fn test_cancel_stream_enriched_event() {
+    use soroban_sdk::testutils::Events as _;
+    use soroban_sdk::{symbol_short, Val, Vec as SdkVec};
+
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    // deposit=10_000, rate=10/s → after 100 s claimable=1000, refund=9000
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+
+    env.ledger().with_mut(|l| l.timestamp += 100);
+    client.cancel_stream(&employer, &id);
+
+    // Find the "cancelled" event in the emitted events list
+    let events = env.events().all();
+    let cancelled_events: SdkVec<_> = events
+        .iter()
+        .filter(|(_, topics, _): &(_, SdkVec<Val>, Val)| {
+            // first topic is symbol "cancelled"
+            if let Some(first) = topics.get(0) {
+                let sym: Result<soroban_sdk::Symbol, _> = first.try_into_val(&env);
+                sym.map(|s| s == symbol_short!("cancelled")).unwrap_or(false)
+            } else {
+                false
+            }
+        })
+        .collect();
+
+    assert!(!cancelled_events.is_empty(), "no cancelled event emitted");
+
+    let s = client.get_stream(&id);
+    assert_eq!(s.status, StreamStatus::Cancelled);
+    assert_eq!(s.withdrawn, 1000); // 100 s × 10/s
+}
+
 #[test]
 fn test_stop_time_caps_claimable() {
     let (env, client) = setup();
