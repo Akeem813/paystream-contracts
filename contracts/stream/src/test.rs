@@ -609,3 +609,101 @@ fn test_accept_admin_wrong_address_rejected() {
     client.propose_admin(&new_admin);
     client.accept_admin(&attacker); // wrong address
 }
+
+// ---------------------------------------------------------------------------
+// Issue #61 – TEST-12: Load test for streams_by_employer with 100+ streams
+// ---------------------------------------------------------------------------
+
+/// Load test: create 100 streams for a single employer and verify that
+/// `streams_by_employer` returns all 100 IDs correctly.
+///
+/// This test exercises the `EmployerStreams` persistent `Vec<u64>` index at
+/// scale and documents whether any Soroban value-size limits are approached.
+///
+/// Notes on SC-05 (`stream_count_by_employer`):
+/// That function is not yet implemented. Until it lands, the count is verified
+/// via `streams_by_employer(&employer).len()`. Switch to the dedicated function
+/// once SC-05 is merged.
+///
+/// CPU / memory observations (run locally with `cargo test -- --nocapture`):
+/// Soroban's testutils do not expose raw CPU-instruction or memory counters
+/// through the public SDK v22.0.0 API. To measure those metrics, run the
+/// contract against a local Stellar node with resource metering enabled and
+/// inspect the `TransactionMeta` field. See `benchmarks/gas-optimization-report.md`
+/// for the project's benchmarking approach. No Soroban value-size limits were
+/// triggered at 100 streams during manual testing.
+#[test]
+fn test_streams_by_employer_load_100() {
+    const STREAM_COUNT: u64 = 100;
+
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    // Disable the default min-deposit so small per-stream deposits work.
+    // Total tokens needed: STREAM_COUNT * deposit_per_stream.
+    // setup_token mints 1_000_000_000 so we have plenty of headroom.
+    client.set_min_deposit(&admin, &0, &100);
+
+    let mut expected_ids: soroban_sdk::Vec<u64> = soroban_sdk::Vec::new(&env);
+
+    for i in 0..STREAM_COUNT {
+        // Use a unique employee per stream to satisfy the employer != employee
+        // constraint and avoid any per-employee index collisions.
+        let employee = Address::generate(&env);
+        // deposit=1000, rate=1 — small values to keep the test fast.
+        let id = client.create_stream(&employer, &employee, &token_id, &1000, &1, &0);
+        assert_eq!(
+            id,
+            i + 1,
+            "stream IDs must be assigned sequentially starting at 1"
+        );
+        expected_ids.push_back(id);
+    }
+
+    // --- Verify stream_count ---
+    assert_eq!(
+        client.stream_count(),
+        STREAM_COUNT,
+        "stream_count() must equal the number of streams created"
+    );
+
+    // --- Verify streams_by_employer returns all 100 IDs ---
+    let employer_streams = client.streams_by_employer(&employer);
+
+    // Count check — proxy for stream_count_by_employer (SC-05).
+    // TODO: replace with client.stream_count_by_employer(&employer) once SC-05 lands.
+    assert_eq!(
+        employer_streams.len() as u64,
+        STREAM_COUNT,
+        "streams_by_employer must return exactly {STREAM_COUNT} IDs"
+    );
+
+    // Content check — every created ID must appear in the index.
+    for id in expected_ids.iter() {
+        assert!(
+            employer_streams.contains(id),
+            "stream ID {id} missing from streams_by_employer result"
+        );
+    }
+
+    // --- Verify each stream is retrievable and Active ---
+    for id in employer_streams.iter() {
+        let s = client.get_stream(&id);
+        assert_eq!(
+            s.status,
+            StreamStatus::Active,
+            "stream {id} should be Active"
+        );
+        assert_eq!(s.employer, employer, "stream {id} should belong to employer");
+    }
+
+    // --- Soroban limits documentation ---
+    // At 100 streams the EmployerStreams Vec holds 100 × 8-byte u64 values = 800 bytes.
+    // Soroban's persistent storage value size limit is 64 KiB per entry (as of SDK v22.0.0).
+    // 800 bytes is well within that limit. The limit would be approached at approximately
+    // 64 KiB / 8 bytes = 8,192 streams per employer. Recommend adding a test at 8,000+
+    // streams if large-scale employers are expected in production.
+}
