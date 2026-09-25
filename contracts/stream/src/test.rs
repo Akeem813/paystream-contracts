@@ -209,7 +209,7 @@ fn test_multiple_pause_resume_cycles() {
 }
 
 #[test]
-#[should_panic(expected = "stream not active")]
+#[should_panic(expected = "E017")]
 fn test_withdraw_during_pause_panics() {
     let (env, client) = setup();
     let admin = Address::generate(&env);
@@ -227,7 +227,7 @@ fn test_withdraw_during_pause_panics() {
 }
 
 #[test]
-#[should_panic(expected = "stream not active")]
+#[should_panic(expected = "E017")]
 fn test_cannot_withdraw_from_cancelled_stream() {
     let (env, client) = setup();
     let admin = Address::generate(&env);
@@ -264,7 +264,7 @@ fn test_withdraw_exhausted_returns_zero() {
 }
 
 #[test]
-#[should_panic(expected = "stream not active")]
+#[should_panic(expected = "E017")]
 fn test_withdraw_cancelled_still_panics() {
     let (env, client) = setup();
     let admin = Address::generate(&env);
@@ -485,7 +485,7 @@ fn test_create_stream_same_employer_employee_rejected() {
 
 /// top_up with amount = 0 must be rejected.
 #[test]
-#[should_panic(expected = "amount must be positive")]
+#[should_panic(expected = "E023")]
 fn test_top_up_zero_amount_rejected() {
     let (env, client) = setup();
     let admin = Address::generate(&env);
@@ -599,7 +599,7 @@ fn test_propose_admin_non_admin_rejected() {
 }
 
 #[test]
-#[should_panic(expected = "not the pending admin")]
+#[should_panic(expected = "E011")]
 fn test_accept_admin_wrong_address_rejected() {
     let (env, client) = setup();
     let admin = Address::generate(&env);

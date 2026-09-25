@@ -18,8 +18,11 @@ use storage::{
     set_min_deposit, set_pending_admin,
 };
 use types::{
-    DataKey, Stream, StreamParams, StreamStatus, ERR_REENTRANT, ERR_STREAM_CANCELLED,
-    ERR_STREAM_EXHAUSTED, ERR_ZERO_DEPOSIT,
+    DataKey, Stream, StreamParams, StreamStatus, ERR_ADMIN_NOT_SET, ERR_AMOUNT_NOT_POSITIVE,
+    ERR_CONTRACT_PAUSED, ERR_EMPTY_PARAMS, ERR_NOT_ADMIN, ERR_NOT_EMPLOYEE, ERR_NOT_EMPLOYER,
+    ERR_NOT_PENDING_ADMIN, ERR_NO_PENDING_ADMIN, ERR_REENTRANT, ERR_STREAM_ALREADY_ENDED,
+    ERR_STREAM_CANCELLED, ERR_STREAM_EXHAUSTED, ERR_STREAM_NOT_ACTIVE, ERR_STREAM_NOT_FOUND,
+    ERR_STREAM_NOT_PAUSED, ERR_STOP_TIME_PAST, ERR_ZERO_DEPOSIT,
 };
 use validate::{validate_create_stream, validate_top_up};
 
@@ -80,8 +83,8 @@ impl StreamContract {
     /// - Panics if `new_admin` does not match the pending admin
     pub fn accept_admin(env: Env, new_admin: Address) {
         new_admin.require_auth();
-        let pending = get_pending_admin(&env).expect("no pending admin");
-        assert_eq!(pending, new_admin, "not the pending admin");
+        let pending = get_pending_admin(&env).expect(ERR_NO_PENDING_ADMIN);
+        assert_eq!(pending, new_admin, "{}", ERR_NOT_PENDING_ADMIN);
         set_admin(&env, &new_admin);
         clear_pending_admin(&env);
     }
@@ -138,7 +141,7 @@ impl StreamContract {
     pub fn set_min_deposit(env: Env, admin: Address, nonce: u64, amount: i128) {
         admin.require_auth();
         let stored_admin = get_admin(&env);
-        assert_eq!(admin, stored_admin, "not the admin");
+        assert_eq!(admin, stored_admin, "{}", ERR_NOT_ADMIN);
         consume_admin_nonce(&env, nonce);
         assert!(amount > 0, "{}", ERR_ZERO_DEPOSIT);
         set_min_deposit(&env, amount);
@@ -179,7 +182,7 @@ impl StreamContract {
         stop_time: u64,
     ) -> u64 {
         employer.require_auth();
-        assert!(!get_paused(&env), "contract is paused");
+        assert!(!get_paused(&env), "{}", ERR_CONTRACT_PAUSED);
 
         let now = env.ledger().timestamp();
         let min_deposit = get_min_deposit(&env);
@@ -242,8 +245,8 @@ impl StreamContract {
         params: Vec<StreamParams>,
     ) -> Vec<u64> {
         employer.require_auth();
-        assert!(!get_paused(&env), "contract is paused");
-        assert!(!params.is_empty(), "params must not be empty");
+        assert!(!get_paused(&env), "{}", ERR_CONTRACT_PAUSED);
+        assert!(!params.is_empty(), "{}", ERR_EMPTY_PARAMS);
 
         let now = env.ledger().timestamp();
         let min_deposit = get_min_deposit(&env);
@@ -310,12 +313,13 @@ impl StreamContract {
     /// - E003 if a reentrant withdraw is detected
     pub fn withdraw(env: Env, employee: Address, stream_id: u64) -> i128 {
         employee.require_auth();
-        assert!(!get_paused(&env), "contract is paused");
-        let mut stream = load_stream(&env, stream_id).expect("stream not found");
-        assert_eq!(stream.employee, employee, "not the employee");
+        assert!(!get_paused(&env), "{}", ERR_CONTRACT_PAUSED);
+        let mut stream = load_stream(&env, stream_id).expect(ERR_STREAM_NOT_FOUND);
+        assert_eq!(stream.employee, employee, "{}", ERR_NOT_EMPLOYEE);
         assert!(
             stream.status == StreamStatus::Active || stream.status == StreamStatus::Exhausted,
-            "stream not active"
+            "{}",
+            ERR_STREAM_NOT_ACTIVE
         );
 
         let now = env.ledger().timestamp();
@@ -366,8 +370,8 @@ impl StreamContract {
     pub fn top_up(env: Env, employer: Address, stream_id: u64, amount: i128) {
         employer.require_auth();
         validate_top_up(amount);
-        let mut stream = load_stream(&env, stream_id).expect("stream not found");
-        assert_eq!(stream.employer, employer, "not the employer");
+        let mut stream = load_stream(&env, stream_id).expect(ERR_STREAM_NOT_FOUND);
+        assert_eq!(stream.employer, employer, "{}", ERR_NOT_EMPLOYER);
         assert!(
             stream.status != StreamStatus::Cancelled,
             "{}",
@@ -406,9 +410,9 @@ impl StreamContract {
     /// - Panics if stream is not Active
     pub fn pause_stream(env: Env, employer: Address, stream_id: u64) {
         employer.require_auth();
-        let mut stream = load_stream(&env, stream_id).expect("stream not found");
-        assert_eq!(stream.employer, employer, "not the employer");
-        assert_eq!(stream.status, StreamStatus::Active, "stream not active");
+        let mut stream = load_stream(&env, stream_id).expect(ERR_STREAM_NOT_FOUND);
+        assert_eq!(stream.employer, employer, "{}", ERR_NOT_EMPLOYER);
+        assert_eq!(stream.status, StreamStatus::Active, "{}", ERR_STREAM_NOT_ACTIVE);
         stream.status = StreamStatus::Paused;
         save_stream(&env, &stream);
         events::stream_status_changed(&env, stream_id, &StreamStatus::Paused);
@@ -429,9 +433,9 @@ impl StreamContract {
     /// - Panics if stream is not Paused
     pub fn resume_stream(env: Env, employer: Address, stream_id: u64) {
         employer.require_auth();
-        let mut stream = load_stream(&env, stream_id).expect("stream not found");
-        assert_eq!(stream.employer, employer, "not the employer");
-        assert_eq!(stream.status, StreamStatus::Paused, "stream not paused");
+        let mut stream = load_stream(&env, stream_id).expect(ERR_STREAM_NOT_FOUND);
+        assert_eq!(stream.employer, employer, "{}", ERR_NOT_EMPLOYER);
+        assert_eq!(stream.status, StreamStatus::Paused, "{}", ERR_STREAM_NOT_PAUSED);
         stream.last_withdraw_time = env.ledger().timestamp();
         stream.status = StreamStatus::Active;
         save_stream(&env, &stream);
@@ -454,11 +458,12 @@ impl StreamContract {
     /// - Panics if stream is already Cancelled or Exhausted
     pub fn cancel_stream(env: Env, employer: Address, stream_id: u64) {
         employer.require_auth();
-        let mut stream = load_stream(&env, stream_id).expect("stream not found");
-        assert_eq!(stream.employer, employer, "not the employer");
+        let mut stream = load_stream(&env, stream_id).expect(ERR_STREAM_NOT_FOUND);
+        assert_eq!(stream.employer, employer, "{}", ERR_NOT_EMPLOYER);
         assert!(
             stream.status == StreamStatus::Active || stream.status == StreamStatus::Paused,
-            "stream already ended"
+            "{}",
+            ERR_STREAM_ALREADY_ENDED
         );
 
         let now = env.ledger().timestamp();
@@ -502,7 +507,7 @@ impl StreamContract {
     /// # Errors
     /// - Panics if stream not found
     pub fn get_stream(env: Env, stream_id: u64) -> Stream {
-        load_stream(&env, stream_id).expect("stream not found")
+        load_stream(&env, stream_id).expect(ERR_STREAM_NOT_FOUND)
     }
 
     /// Query how many tokens the employee can withdraw right now.
@@ -518,7 +523,7 @@ impl StreamContract {
     /// # Errors
     /// - Panics if stream not found
     pub fn claimable(env: Env, stream_id: u64) -> i128 {
-        let stream = load_stream(&env, stream_id).expect("stream not found");
+        let stream = load_stream(&env, stream_id).expect(ERR_STREAM_NOT_FOUND);
         claimable_amount(&stream, env.ledger().timestamp())
     }
 
@@ -536,7 +541,7 @@ impl StreamContract {
     /// # Errors
     /// - Panics if stream not found
     pub fn claimable_at(env: Env, stream_id: u64, timestamp: u64) -> i128 {
-        let stream = load_stream(&env, stream_id).expect("stream not found");
+        let stream = load_stream(&env, stream_id).expect(ERR_STREAM_NOT_FOUND);
         claimable_amount(&stream, timestamp)
     }
 
@@ -557,7 +562,7 @@ impl StreamContract {
             .storage()
             .instance()
             .get(&DataKey::Admin)
-            .expect("admin not set");
+            .expect(ERR_ADMIN_NOT_SET);
         admin.require_auth();
         consume_admin_nonce(&env, nonce);
         env.deployer().update_current_contract_wasm(new_wasm_hash);
@@ -579,8 +584,8 @@ impl StreamContract {
             .storage()
             .instance()
             .get(&DataKey::Admin)
-            .expect("admin not set");
-        assert_eq!(admin, stored_admin, "not the admin");
+            .expect(ERR_ADMIN_NOT_SET);
+        assert_eq!(admin, stored_admin, "{}", ERR_NOT_ADMIN);
     }
 
     /// Return the total number of streams ever created.
