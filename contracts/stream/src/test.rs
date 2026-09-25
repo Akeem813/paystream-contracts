@@ -609,3 +609,273 @@ fn test_accept_admin_wrong_address_rejected() {
     client.propose_admin(&new_admin);
     client.accept_admin(&attacker); // wrong address
 }
+
+// ---------------------------------------------------------------------------
+// Issue #46 – SEC-17: Access control matrix tests
+//
+// This module provides a systematic matrix verifying that:
+//   1. Every admin-only function rejects a non-admin caller.
+//   2. Every employer-only function rejects a non-employer caller.
+//   3. Every employee-only function rejects a non-employee caller.
+//
+// Strategy: mock_all_auths() is kept so require_auth() never fires; the
+// assertions under test are the explicit identity checks (assert_eq! on
+// stream.employer / stream.employee, and assert_eq! on admin vs stored admin).
+// ---------------------------------------------------------------------------
+
+mod access_control_matrix {
+    use super::*;
+
+    // -----------------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------------
+
+    /// Full environment: mock auth, initialized contract, one active stream.
+    fn setup_with_stream() -> (Env, StreamContractClient<'static>, Address, Address, Address, u64) {
+        let (env, client) = setup();
+        let admin = Address::generate(&env);
+        let employer = Address::generate(&env);
+        let employee = Address::generate(&env);
+        let token_id = setup_token(&env, &employer);
+
+        client.initialize(&admin);
+        // ensure min_deposit = 100 so small deposit is accepted
+        client.set_min_deposit(&admin, &0, &100);
+        let stream_id =
+            client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+
+        (env, client, employer, employee, admin, stream_id)
+    }
+
+    // -----------------------------------------------------------------------
+    // Admin-only functions: reject wrong admin
+    // -----------------------------------------------------------------------
+
+    /// set_min_deposit with a non-admin caller is rejected.
+    #[test]
+    #[should_panic]
+    fn acm_set_min_deposit_non_admin_rejected() {
+        let (env, client) = setup();
+        let admin = Address::generate(&env);
+        let attacker = Address::generate(&env);
+        client.initialize(&admin);
+        // attacker passes its own address as admin parameter
+        client.set_min_deposit(&attacker, &0, &500);
+    }
+
+    /// pause_contract requires admin auth; non-admin (no auth mocked) panics.
+    #[test]
+    #[should_panic]
+    fn acm_pause_contract_non_admin_rejected() {
+        // No mock_all_auths — admin.require_auth() will fire.
+        let env = Env::default();
+        let contract_id = env.register(StreamContract, ());
+        let client = StreamContractClient::new(&env, &contract_id);
+
+        // Initialize with mocked auth
+        env.mock_all_auths();
+        let admin = Address::generate(&env);
+        client.initialize(&admin);
+
+        // Remove auth mocking for the attacker call
+        let env2 = Env::default();
+        env2.register_at(&contract_id, StreamContract, ());
+        let client2 = StreamContractClient::new(&env2, &contract_id);
+        client2.pause_contract(&0);
+    }
+
+    /// unpause_contract requires admin auth; non-admin (no auth mocked) panics.
+    #[test]
+    #[should_panic]
+    fn acm_unpause_contract_non_admin_rejected() {
+        let env = Env::default();
+        let contract_id = env.register(StreamContract, ());
+        let client = StreamContractClient::new(&env, &contract_id);
+
+        env.mock_all_auths();
+        let admin = Address::generate(&env);
+        client.initialize(&admin);
+        client.pause_contract(&0); // put it in paused state
+
+        let env2 = Env::default();
+        env2.register_at(&contract_id, StreamContract, ());
+        let client2 = StreamContractClient::new(&env2, &contract_id);
+        client2.unpause_contract(&1);
+    }
+
+    /// upgrade requires admin auth; non-admin (no auth mocked) panics.
+    #[test]
+    #[should_panic]
+    fn acm_upgrade_non_admin_rejected() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(StreamContract, ());
+        let client = StreamContractClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        client.initialize(&admin);
+
+        let env2 = Env::default();
+        env2.register_at(&contract_id, StreamContract, ());
+        let client2 = StreamContractClient::new(&env2, &contract_id);
+
+        mod stream_wasm {
+            soroban_sdk::contractimport!(
+                file = "../../target/wasm32v1-none/release/paystream_stream.wasm"
+            );
+        }
+        let new_wasm_hash = env2.deployer().upload_contract_wasm(stream_wasm::WASM);
+        client2.upgrade(&new_wasm_hash, &0);
+    }
+
+    /// migrate with wrong admin address panics (checked by assert_eq!).
+    #[test]
+    #[should_panic]
+    fn acm_migrate_non_admin_rejected() {
+        let (env, client) = setup();
+        let admin = Address::generate(&env);
+        let attacker = Address::generate(&env);
+        client.initialize(&admin);
+        client.migrate(&attacker); // not the stored admin
+    }
+
+    /// propose_admin requires admin auth; non-admin (no auth mocked) panics.
+    #[test]
+    #[should_panic]
+    fn acm_propose_admin_non_admin_rejected() {
+        let env = Env::default();
+        let contract_id = env.register(StreamContract, ());
+        let client = StreamContractClient::new(&env, &contract_id);
+
+        env.mock_all_auths();
+        let admin = Address::generate(&env);
+        client.initialize(&admin);
+
+        let env2 = Env::default();
+        env2.register_at(&contract_id, StreamContract, ());
+        let client2 = StreamContractClient::new(&env2, &contract_id);
+        let attacker = Address::generate(&env2);
+        client2.propose_admin(&attacker); // should panic — not admin
+    }
+
+    // -----------------------------------------------------------------------
+    // Employer-only stream functions: reject non-employer
+    // -----------------------------------------------------------------------
+
+    /// pause_stream with wrong employer (not the stream owner) is rejected.
+    #[test]
+    #[should_panic]
+    fn acm_pause_stream_wrong_employer_rejected() {
+        let (env, client, _employer, _employee, _admin, stream_id) = setup_with_stream();
+        let attacker = Address::generate(&env);
+        client.pause_stream(&attacker, &stream_id);
+    }
+
+    /// resume_stream with wrong employer is rejected.
+    #[test]
+    #[should_panic]
+    fn acm_resume_stream_wrong_employer_rejected() {
+        let (env, client, employer, _employee, _admin, stream_id) = setup_with_stream();
+        let attacker = Address::generate(&env);
+        // must be paused first — pause as the real employer
+        client.pause_stream(&employer, &stream_id);
+        client.resume_stream(&attacker, &stream_id);
+    }
+
+    /// cancel_stream with wrong employer is rejected.
+    #[test]
+    #[should_panic]
+    fn acm_cancel_stream_wrong_employer_rejected() {
+        let (env, client, _employer, _employee, _admin, stream_id) = setup_with_stream();
+        let attacker = Address::generate(&env);
+        client.cancel_stream(&attacker, &stream_id);
+    }
+
+    /// top_up with wrong employer is rejected.
+    #[test]
+    #[should_panic]
+    fn acm_top_up_wrong_employer_rejected() {
+        let (env, client, _employer, _employee, _admin, stream_id) = setup_with_stream();
+        let attacker = Address::generate(&env);
+        client.top_up(&attacker, &stream_id, &1000);
+    }
+
+    // -----------------------------------------------------------------------
+    // Employee-only stream functions: reject non-employee
+    // -----------------------------------------------------------------------
+
+    /// withdraw by a non-employee (the employer) is rejected.
+    #[test]
+    #[should_panic]
+    fn acm_withdraw_by_employer_rejected() {
+        let (env, client, employer, _employee, _admin, stream_id) = setup_with_stream();
+        env.ledger().with_mut(|l| l.timestamp += 100);
+        client.withdraw(&employer, &stream_id);
+    }
+
+    /// withdraw by a random third party is rejected.
+    #[test]
+    #[should_panic]
+    fn acm_withdraw_by_attacker_rejected() {
+        let (env, client, _employer, _employee, _admin, stream_id) = setup_with_stream();
+        let attacker = Address::generate(&env);
+        env.ledger().with_mut(|l| l.timestamp += 100);
+        client.withdraw(&attacker, &stream_id);
+    }
+
+    // -----------------------------------------------------------------------
+    // Positive matrix: authorised callers succeed
+    // -----------------------------------------------------------------------
+
+    /// Admin can call every admin-only function successfully.
+    #[test]
+    fn acm_admin_can_call_all_admin_functions() {
+        let (env, client) = setup();
+        let admin = Address::generate(&env);
+        client.initialize(&admin);
+
+        // set_min_deposit (nonce 0)
+        client.set_min_deposit(&admin, &0, &500);
+        assert_eq!(client.admin_nonce(), 1);
+
+        // pause_contract (nonce 1)
+        client.pause_contract(&1);
+        assert_eq!(client.admin_nonce(), 2);
+
+        // unpause_contract (nonce 2)
+        client.unpause_contract(&2);
+        assert_eq!(client.admin_nonce(), 3);
+
+        // propose_admin (nonce 3) — two-step transfer to a new admin
+        let new_admin = Address::generate(&env);
+        client.propose_admin(&new_admin);
+        // accept_admin
+        client.accept_admin(&new_admin);
+
+        // migrate as new admin
+        client.migrate(&new_admin);
+    }
+
+    /// Employer can call every employer-only function on their own stream.
+    #[test]
+    fn acm_employer_can_call_all_employer_functions() {
+        let (env, client, employer, _employee, _admin, stream_id) = setup_with_stream();
+
+        client.pause_stream(&employer, &stream_id);
+        client.resume_stream(&employer, &stream_id);
+
+        // top_up after resume
+        client.top_up(&employer, &stream_id, &5_000);
+
+        // cancel
+        client.cancel_stream(&employer, &stream_id);
+    }
+
+    /// Employee can withdraw from their own active stream.
+    #[test]
+    fn acm_employee_can_withdraw_own_stream() {
+        let (env, client, _employer, employee, _admin, stream_id) = setup_with_stream();
+        env.ledger().with_mut(|l| l.timestamp += 200);
+        let amount = client.withdraw(&employee, &stream_id);
+        assert!(amount > 0);
+    }
+}
