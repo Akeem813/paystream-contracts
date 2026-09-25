@@ -609,3 +609,28 @@ fn test_accept_admin_wrong_address_rejected() {
     client.propose_admin(&new_admin);
     client.accept_admin(&attacker); // wrong address
 }
+
+// ---------------------------------------------------------------------------
+// SC-17 – is_paused public query
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_is_paused_returns_false_initially() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+    assert!(!client.is_paused());
+}
+
+#[test]
+fn test_is_paused_reflects_pause_unpause() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    client.pause_contract(&0);
+    assert!(client.is_paused());
+
+    client.unpause_contract(&1);
+    assert!(!client.is_paused());
+}

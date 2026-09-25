@@ -597,6 +597,17 @@ impl StreamContract {
             .unwrap_or(0)
     }
 
+    /// Query whether the contract is currently paused.
+    ///
+    /// Off-chain tools can call this before submitting transactions to avoid
+    /// hitting a paused-contract rejection.
+    ///
+    /// # Returns
+    /// `true` if the contract is paused, `false` otherwise.
+    pub fn is_paused(env: Env) -> bool {
+        get_paused(&env)
+    }
+
     /// Return the current admin nonce.
     ///
     /// Use this to build the `nonce` argument for the next admin transaction
