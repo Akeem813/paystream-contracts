@@ -12,3 +12,7 @@ soroban-sdk = { version = "22.0.0", features = ["testutils"] }
 [[bin]]
 name = "fuzz_claimable"
 path = "src/fuzz_claimable.rs"
+
+[[bin]]
+name = "fuzz_withdraw"
+path = "src/fuzz_withdraw.rs"
