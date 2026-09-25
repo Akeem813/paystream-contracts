@@ -609,3 +609,38 @@ fn test_accept_admin_wrong_address_rejected() {
     client.propose_admin(&new_admin);
     client.accept_admin(&attacker); // wrong address
 }
+
+// ---------------------------------------------------------------------------
+// SC-18 – get_pending_admin public query
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_get_pending_admin_none_initially() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+    assert!(client.get_pending_admin().is_none());
+}
+
+#[test]
+fn test_get_pending_admin_some_after_propose() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    client.propose_admin(&new_admin);
+    assert_eq!(client.get_pending_admin(), Some(new_admin.clone()));
+}
+
+#[test]
+fn test_get_pending_admin_none_after_accept() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    client.propose_admin(&new_admin);
+    client.accept_admin(&new_admin);
+    assert!(client.get_pending_admin().is_none());
+}

@@ -597,6 +597,18 @@ impl StreamContract {
             .unwrap_or(0)
     }
 
+    /// Query the pending admin address set by [`propose_admin`].
+    ///
+    /// Returns `None` if no two-step admin transfer is in progress.
+    /// Off-chain governance tools use this to verify the nominee before
+    /// calling [`accept_admin`].
+    ///
+    /// # Returns
+    /// `Some(Address)` of the pending admin, or `None`.
+    pub fn get_pending_admin(env: Env) -> Option<Address> {
+        storage::get_pending_admin(&env)
+    }
+
     /// Return the current admin nonce.
     ///
     /// Use this to build the `nonce` argument for the next admin transaction
