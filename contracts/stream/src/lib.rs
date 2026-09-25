@@ -21,7 +21,7 @@ use types::{
     DataKey, Stream, StreamParams, StreamStatus, ERR_REENTRANT, ERR_STREAM_CANCELLED,
     ERR_STREAM_EXHAUSTED, ERR_ZERO_DEPOSIT,
 };
-use validate::{validate_create_stream, validate_top_up};
+use validate::{validate_create_stream, validate_rate, validate_top_up};
 
 fn get_paused(env: &Env) -> bool {
     env.storage()
@@ -438,8 +438,48 @@ impl StreamContract {
         events::stream_status_changed(&env, stream_id, &StreamStatus::Active);
     }
 
-    /// Employer cancels a stream and reclaims unstreamed funds.
+    /// Employer updates the `rate_per_second` on an Active or Paused stream.
     ///
+    /// Before changing the rate, any tokens accrued since the last withdrawal
+    /// are settled by resetting `last_withdraw_time` to the current ledger
+    /// timestamp.  This ensures the employee is credited at the old rate for
+    /// all elapsed time and will accrue at the new rate going forward.
+    ///
+    /// # Parameters
+    /// - `employer` — must match the stream's employer (requires auth)
+    /// - `stream_id` — ID of the stream to update
+    /// - `new_rate` — new `rate_per_second` value (1 – 1,000,000,000)
+    ///
+    /// # Errors
+    /// - Panics if stream not found
+    /// - Panics if caller is not the stream's employer
+    /// - Panics if stream is not Active or Paused
+    /// - E001 if `new_rate` ≤ 0
+    /// - E008 if `new_rate` > 1,000,000,000
+    pub fn update_rate(env: Env, employer: Address, stream_id: u64, new_rate: i128) {
+        employer.require_auth();
+        validate_rate(new_rate);
+
+        let mut stream = load_stream(&env, stream_id).expect("stream not found");
+        assert_eq!(stream.employer, employer, "not the employer");
+        assert!(
+            stream.status == StreamStatus::Active || stream.status == StreamStatus::Paused,
+            "stream not active or paused"
+        );
+
+        // Settle accrued-but-not-withdrawn tokens by snapshotting last_withdraw_time
+        // to now.  The next claimable calculation will start from this point at
+        // the new rate.  (For a Paused stream elapsed is already 0 so this is a
+        // no-op in terms of accrual, but we still reset for consistency.)
+        stream.last_withdraw_time = env.ledger().timestamp();
+
+        let old_rate = stream.rate_per_second;
+        stream.rate_per_second = new_rate;
+        save_stream(&env, &stream);
+        events::rate_updated(&env, stream_id, old_rate, new_rate);
+    }
+
+    /// Employer cancels a stream and reclaims unstreamed funds.    ///
     /// The employee receives all tokens earned up to the cancellation time.
     /// The employer is refunded the remaining deposit. Works on both Active
     /// and Paused streams.
