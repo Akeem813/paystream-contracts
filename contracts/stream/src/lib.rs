@@ -18,7 +18,7 @@ use storage::{
     set_min_deposit, set_pending_admin,
 };
 use types::{
-    DataKey, Stream, StreamParams, StreamStatus, ERR_REENTRANT, ERR_STREAM_CANCELLED,
+    DataKey, Stream, StreamParams, StreamStatus, ERR_OVERFLOW, ERR_REENTRANT, ERR_STREAM_CANCELLED,
     ERR_STREAM_EXHAUSTED, ERR_ZERO_DEPOSIT,
 };
 use validate::{validate_create_stream, validate_top_up};
@@ -385,7 +385,7 @@ impl StreamContract {
         stream.deposit = stream
             .deposit
             .checked_add(amount)
-            .expect("deposit overflow");
+            .expect(ERR_OVERFLOW);
         save_stream(&env, &stream);
         events::topped_up(&env, stream_id, &employer, amount);
     }
