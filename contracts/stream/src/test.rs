@@ -793,12 +793,14 @@ fn test_admin_transfer_full_flow() {
     let new_admin = Address::generate(&env);
     client.initialize(&admin);
 
-    client.propose_admin(&new_admin);
-    client.accept_admin(&new_admin);
+    // propose_admin now consumes admin nonce 0 and stores it for accept_admin
+    client.propose_admin(&new_admin, &0);
+    client.accept_admin(&new_admin, &0);
 
     // new_admin can now call propose_admin (proves they are admin)
+    // admin nonce is now 1 after the proposal above
     let another = Address::generate(&env);
-    client.propose_admin(&another); // would panic if new_admin is not admin
+    client.propose_admin(&another, &1); // would panic if new_admin is not admin
 }
 
 #[test]
@@ -820,19 +822,82 @@ fn test_propose_admin_non_admin_rejected() {
     let client2 = StreamContractClient::new(&env2, &contract_id);
 
     let attacker = Address::generate(&env2);
-    client2.propose_admin(&attacker); // should panic — attacker is not admin
+    client2.propose_admin(&attacker, &0); // should panic — attacker is not admin
 }
 
 #[test]
-#[should_panic(expected = "not the pending admin")]
+#[should_panic(expected = "E011")]
 fn test_accept_admin_wrong_address_rejected() {
     let (env, client) = setup();
     let admin = Address::generate(&env);
     let new_admin = Address::generate(&env);
     let attacker = Address::generate(&env);
     client.initialize(&admin);
-    client.propose_admin(&new_admin);
-    client.accept_admin(&attacker); // wrong address
+    client.propose_admin(&new_admin, &0);
+    client.accept_admin(&attacker, &0); // wrong address
+}
+
+// ---------------------------------------------------------------------------
+// Issue #42 – Nonce for accept_admin (front-running protection)
+// ---------------------------------------------------------------------------
+
+/// Correct nonce in accept_admin completes the transfer successfully.
+#[test]
+fn test_accept_admin_correct_nonce_succeeds() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    assert_eq!(client.admin_nonce(), 0);
+    client.propose_admin(&new_admin, &0); // consumes nonce 0
+    assert_eq!(client.admin_nonce(), 1);
+
+    client.accept_admin(&new_admin, &0); // nonce 0 was stored at proposal time
+
+    // new_admin is now admin — prove it by calling an admin-only op with nonce 1
+    client.set_min_deposit(&new_admin, &1, &500);
+}
+
+/// Wrong nonce in accept_admin is rejected with E024.
+#[test]
+#[should_panic(expected = "E024")]
+fn test_accept_admin_wrong_nonce_rejected() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    client.propose_admin(&new_admin, &0); // stores nonce 0
+    client.accept_admin(&new_admin, &1); // wrong nonce → E024
+}
+
+/// The nonce stored by propose_admin cannot be replayed: after a successful
+/// accept_admin the PendingAdminNonce key is cleared, so a second call with
+/// the same nonce finds no pending admin and panics with E010.
+#[test]
+#[should_panic(expected = "E010")]
+fn test_accept_admin_nonce_cleared_after_transfer() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    client.propose_admin(&new_admin, &0);
+    client.accept_admin(&new_admin, &0); // completes; clears pending + nonce
+    client.accept_admin(&new_admin, &0); // no pending admin → E010
+}
+
+/// propose_admin itself requires a valid admin nonce (E009).
+#[test]
+#[should_panic(expected = "E009")]
+fn test_propose_admin_bad_nonce_rejected() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    client.propose_admin(&new_admin, &99); // nonce 99 ≠ 0 → E009
 }
 
 // ---------------------------------------------------------------------------

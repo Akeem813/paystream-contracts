@@ -19,12 +19,13 @@ pub const CONTRACT_VERSION: u32 = 1;
 use storage::{
     claimable_amount, clear_pending_admin, consume_admin_nonce, get_admin, get_admin_nonce,
     get_employee_streams, get_employer_streams, get_min_deposit, get_pending_admin,
-    index_employee_stream, index_employer_stream, load_stream, next_id, save_stream, set_admin,
-    set_min_deposit, set_pending_admin,
+    get_pending_admin_nonce, index_employee_stream, index_employer_stream, load_stream, next_id,
+    save_stream, set_admin, set_min_deposit, set_pending_admin, set_pending_admin_nonce,
 };
 use types::{
-    DataKey, Stream, StreamParams, StreamStatus, ERR_REENTRANT, ERR_STREAM_CANCELLED,
-    ERR_STREAM_EXHAUSTED, ERR_ZERO_DEPOSIT,
+    DataKey, Stream, StreamParams, StreamStatus, ERR_BAD_PENDING_NONCE, ERR_NO_PENDING_ADMIN,
+    ERR_NOT_PENDING_ADMIN, ERR_REENTRANT, ERR_STREAM_CANCELLED, ERR_STREAM_EXHAUSTED,
+    ERR_ZERO_DEPOSIT,
 };
 use validate::{validate_create_stream, validate_rate, validate_top_up};
 
@@ -62,31 +63,43 @@ impl StreamContract {
 
     /// Step 1 of two-step admin transfer: current admin proposes a new admin.
     ///
-    /// The nominated address must call [`accept_admin`] to complete the transfer.
+    /// The nominated address must call [`accept_admin`] with the same `nonce`
+    /// to complete the transfer. Binding a nonce to the proposal makes the
+    /// transfer intent non-replayable: an attacker who observes the proposal
+    /// on-chain cannot front-run acceptance without knowing the nonce.
     ///
     /// # Parameters
     /// - `new_admin` — address being nominated as the next admin
+    /// - `nonce` — current admin nonce; consumed here for replay protection
+    ///   and also stored so `accept_admin` can verify it
     ///
     /// # Errors
     /// - Panics if the current admin auth fails
-    pub fn propose_admin(env: Env, new_admin: Address) {
+    /// - E009 if `nonce` does not match the stored admin nonce
+    pub fn propose_admin(env: Env, new_admin: Address, nonce: u64) {
         let current = get_admin(&env);
         current.require_auth();
+        consume_admin_nonce(&env, nonce);
         set_pending_admin(&env, &new_admin);
+        set_pending_admin_nonce(&env, nonce);
     }
 
     /// Step 2 of two-step admin transfer: proposed admin accepts and becomes admin.
     ///
     /// # Parameters
     /// - `new_admin` — must match the address set by [`propose_admin`] (requires auth)
+    /// - `nonce` — must match the nonce stored by [`propose_admin`]
     ///
     /// # Errors
-    /// - Panics if there is no pending admin
-    /// - Panics if `new_admin` does not match the pending admin
-    pub fn accept_admin(env: Env, new_admin: Address) {
+    /// - E010 if there is no pending admin
+    /// - E011 if `new_admin` does not match the pending admin
+    /// - E024 if `nonce` does not match the nonce stored by propose_admin
+    pub fn accept_admin(env: Env, new_admin: Address, nonce: u64) {
         new_admin.require_auth();
-        let pending = get_pending_admin(&env).expect("no pending admin");
-        assert_eq!(pending, new_admin, "not the pending admin");
+        let pending = get_pending_admin(&env).expect(ERR_NO_PENDING_ADMIN);
+        assert_eq!(pending, new_admin, "{}", ERR_NOT_PENDING_ADMIN);
+        let stored_nonce = get_pending_admin_nonce(&env).expect(ERR_NO_PENDING_ADMIN);
+        assert!(nonce == stored_nonce, "{}", ERR_BAD_PENDING_NONCE);
         set_admin(&env, &new_admin);
         clear_pending_admin(&env);
     }
