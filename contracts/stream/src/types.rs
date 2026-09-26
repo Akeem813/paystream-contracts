@@ -72,6 +72,8 @@ pub enum DataKey {
     EmployeeStreams(Address),
     /// Contract version written by migrate() for off-chain upgrade verification.
     Version,
+    /// Pending upgrade: stores (wasm_hash, unlock_timestamp).
+    PendingUpgrade,
 }
 
 /// Contract error codes – panic messages reference these names so callers can
@@ -114,3 +116,13 @@ pub const ERR_BAD_NONCE: &str = "E009: invalid admin nonce";
 pub const ERR_NO_PENDING_ADMIN: &str = "E010: no pending admin set";
 pub const ERR_NOT_PENDING_ADMIN: &str = "E011: not the pending admin";
 pub const ERR_BAD_PENDING_NONCE: &str = "E024: invalid pending admin nonce";
+pub const ERR_NO_PENDING_UPGRADE: &str = "E025: no pending upgrade";
+pub const ERR_UPGRADE_TIMELOCK_ACTIVE: &str = "E026: upgrade timelock not yet expired";
+
+/// Pending upgrade record stored during the time-lock window.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct PendingUpgrade {
+    pub wasm_hash: soroban_sdk::BytesN<32>,
+    pub unlock_time: u64,
+}

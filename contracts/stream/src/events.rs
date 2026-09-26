@@ -47,3 +47,23 @@ pub fn rate_updated(env: &Env, stream_id: u64, old_rate: i128, new_rate: i128) {
         (old_rate, new_rate),
     );
 }
+
+pub fn contract_initialized(env: &Env, admin: &Address) {
+    env.events()
+        .publish((symbol_short!("init"),), admin.clone());
+}
+
+pub fn upgrade_proposed(env: &Env, wasm_hash: &soroban_sdk::BytesN<32>, unlock_time: u64) {
+    env.events()
+        .publish((symbol_short!("upg_prop"),), (wasm_hash.clone(), unlock_time));
+}
+
+pub fn upgrade_executed(env: &Env, wasm_hash: &soroban_sdk::BytesN<32>) {
+    env.events()
+        .publish((symbol_short!("upg_exec"),), wasm_hash.clone());
+}
+
+pub fn upgrade_cancelled(env: &Env) {
+    env.events()
+        .publish((symbol_short!("upg_cncl"),), ());
+}
