@@ -46,3 +46,13 @@ pub fn validate_create_stream(
 pub fn validate_top_up(amount: i128) {
     assert!(amount > 0, "{}", ERR_AMOUNT_NOT_POSITIVE);
 }
+
+/// Validate a new rate passed to `update_rate`.
+///
+/// Applies the same rules as `create_stream`:
+/// - E001 if `rate` ≤ 0
+/// - E008 if `rate` > MAX_RATE_PER_SECOND
+pub fn validate_rate(rate: i128) {
+    assert!(rate > 0, "{}", ERR_ZERO_RATE);
+    assert!(rate <= MAX_RATE_PER_SECOND, "{}", ERR_INVALID_RATE);
+}

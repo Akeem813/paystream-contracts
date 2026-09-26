@@ -67,8 +67,23 @@ pub fn get_pending_admin(env: &Env) -> Option<Address> {
     env.storage().instance().get(&DataKey::PendingAdmin)
 }
 
+pub fn set_pending_admin_nonce(env: &Env, nonce: u64) {
+    env.storage()
+        .instance()
+        .set(&DataKey::PendingAdminNonce, &nonce);
+}
+
+pub fn get_pending_admin_nonce(env: &Env) -> Option<u64> {
+    env.storage()
+        .instance()
+        .get(&DataKey::PendingAdminNonce)
+}
+
 pub fn clear_pending_admin(env: &Env) {
     env.storage().instance().remove(&DataKey::PendingAdmin);
+    env.storage()
+        .instance()
+        .remove(&DataKey::PendingAdminNonce);
 }
 
 pub fn get_min_deposit(env: &Env) -> i128 {

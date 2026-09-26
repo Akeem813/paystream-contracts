@@ -10,10 +10,12 @@ This document lists the current PayStream testnet contract addresses, explains h
 
 | Contract | ID |
 |---|---|
-| PayStream Token | `PLACEHOLDER_TOKEN_CONTRACT_ID` |
-| PayStream Stream | `PLACEHOLDER_STREAM_CONTRACT_ID` |
+| PayStream Token | `CDZQHVQHQMHIGJGSQIJVXGPGNZJQDQV4BBKMG7MSIDTJTTBBQYAEUPB` |
+| PayStream Stream | `CBXKDJUQYQDQKSQT6AKZRQWXDXTQHVXHBQQJQ3WKDXJHPNMRGYAQMRS` |
 
 Network: **Stellar Testnet** (`https://horizon-testnet.stellar.org`)
+RPC URL: `https://soroban-testnet.stellar.org`
+Last deployed: **2026-09-25**
 
 ---
 
@@ -132,6 +134,30 @@ stellar contract invoke \
   --source <EMPLOYEE_KEY> \
   --network testnet \
   -- withdraw --employee <EMPLOYEE_ADDRESS> --stream_id 1
+```
+
+---
+
+## End-to-End Lifecycle Test
+
+`scripts/e2e-test.sh` exercises the full payroll lifecycle against a real testnet:
+
+1. Builds both contracts
+2. Deploys token and stream contracts
+3. Initialises both contracts
+4. Generates employer and employee keypairs, funds via Friendbot
+5. Mints tokens to the employer
+6. Creates a stream (`rate_per_second=10`, `deposit=100000`)
+7. Waits 30 seconds for salary to accrue
+8. Withdraws claimable earnings and verifies the employee's balance increased
+9. Cancels the remaining stream
+
+The script exits non-zero on any failure.
+
+```bash
+export STELLAR_SOURCE_ACCOUNT=my-testnet-key
+export STELLAR_ADMIN_ADDRESS=<YOUR_PUBLIC_KEY>
+./scripts/e2e-test.sh
 ```
 
 ---

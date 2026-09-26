@@ -63,10 +63,15 @@ pub enum DataKey {
     Paused,
     /// Pending admin for two-step admin transfer.
     PendingAdmin,
+    /// Nonce bound to the pending admin proposal (front-running protection).
+    /// Cleared together with PendingAdmin when accept_admin completes.
+    PendingAdminNonce,
     /// Index: employer address → Vec<u64> of stream IDs they own.
     EmployerStreams(Address),
     /// Index: employee address → Vec<u64> of stream IDs paying them.
     EmployeeStreams(Address),
+    /// Contract version written by migrate() for off-chain upgrade verification.
+    Version,
 }
 
 /// Contract error codes – panic messages reference these names so callers can
@@ -108,15 +113,4 @@ pub const ERR_INVALID_RATE: &str = "E008: rate_per_second exceeds maximum";
 pub const ERR_BAD_NONCE: &str = "E009: invalid admin nonce";
 pub const ERR_NO_PENDING_ADMIN: &str = "E010: no pending admin set";
 pub const ERR_NOT_PENDING_ADMIN: &str = "E011: not the pending admin";
-pub const ERR_NOT_ADMIN: &str = "E012: not the admin";
-pub const ERR_CONTRACT_PAUSED: &str = "E013: contract is paused";
-pub const ERR_EMPTY_PARAMS: &str = "E014: params must not be empty";
-pub const ERR_STREAM_NOT_FOUND: &str = "E015: stream not found";
-pub const ERR_NOT_EMPLOYEE: &str = "E016: not the employee";
-pub const ERR_STREAM_NOT_ACTIVE: &str = "E017: stream not active";
-pub const ERR_NOT_EMPLOYER: &str = "E018: not the employer";
-pub const ERR_STREAM_NOT_PAUSED: &str = "E019: stream not paused";
-pub const ERR_STREAM_ALREADY_ENDED: &str = "E020: stream already ended";
-pub const ERR_ADMIN_NOT_SET: &str = "E021: admin not set";
-pub const ERR_STOP_TIME_PAST: &str = "E022: stop_time must be in the future";
-pub const ERR_AMOUNT_NOT_POSITIVE: &str = "E023: amount must be positive";
+pub const ERR_BAD_PENDING_NONCE: &str = "E024: invalid pending admin nonce";
