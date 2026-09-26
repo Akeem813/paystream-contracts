@@ -26,5 +26,8 @@ jobs:
           key: ${{ runner.os }}-cargo-fuzz-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-fuzz-
 
-      - name: Run proptest fuzz (1 000 000 iterations)
+      - name: Run proptest fuzz (1 000 000 iterations) — claimable
         run: cargo test --package paystream-stream-fuzz --bin fuzz_claimable
+
+      - name: Run proptest fuzz (1 000 000 iterations) — withdraw
+        run: cargo test --package paystream-stream-fuzz --bin fuzz_withdraw
