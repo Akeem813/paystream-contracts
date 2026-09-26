@@ -29,27 +29,10 @@ pub fn contract_paused(env: &Env, paused: bool) {
     env.events().publish((symbol_short!("paused"),), paused);
 }
 
-/// Enriched cancellation event that includes the exact cash-flow amounts.
-///
-/// Emitted by `cancel_stream` instead of the generic `stream_status_changed`
-/// event so that off-chain indexers can track:
-/// - `claimable_paid` — tokens sent to the employee at cancellation time
-/// - `refund_paid`    — tokens returned to the employer
-pub fn stream_cancelled(
-    env: &Env,
-    stream_id: u64,
-    employer: &Address,
-    employee: &Address,
-    claimable_paid: i128,
-    refund_paid: i128,
-) {
+/// Emitted when `update_rate` changes the stream's `rate_per_second`.
+pub fn rate_updated(env: &Env, stream_id: u64, old_rate: i128, new_rate: i128) {
     env.events().publish(
-        (symbol_short!("cancelled"), stream_id),
-        (
-            employer.clone(),
-            employee.clone(),
-            claimable_paid,
-            refund_paid,
-        ),
+        (symbol_short!("rate_upd"), stream_id),
+        (old_rate, new_rate),
     );
 }

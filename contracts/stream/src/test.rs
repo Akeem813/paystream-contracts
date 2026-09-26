@@ -529,6 +529,24 @@ fn test_create_stream_same_employer_employee_rejected() {
     client.create_stream(&employer, &employer, &token_id, &10_000, &1, &0);
 }
 
+/// stop_time in the past must be rejected — issue #63 (TEST-14).
+#[test]
+#[should_panic(expected = "stop_time must be in the future")]
+fn test_create_stream_past_stop_time_rejected() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+
+    // Advance ledger so we have a non-zero "now", then set stop_time in the past.
+    env.ledger().with_mut(|l| l.timestamp = 1_000);
+    let past_stop_time = env.ledger().timestamp() - 1;
+    client.create_stream(&employer, &employee, &token_id, &10_000, &1, &past_stop_time);
+}
+
 /// top_up with amount = 0 must be rejected.
 #[test]
 #[should_panic(expected = "amount must be positive")]
@@ -542,6 +560,144 @@ fn test_top_up_zero_amount_rejected() {
     client.initialize(&admin);
     let id = client.create_stream(&employer, &employee, &token_id, &10_000, &1, &0);
     client.top_up(&employer, &id, &0);
+}
+
+// ---------------------------------------------------------------------------
+// Issue #27 – update_rate: change stream rate without cancel/recreate
+// ---------------------------------------------------------------------------
+
+/// Employer increases the rate; claimable is recalculated at the new rate
+/// going forward (old accrual is settled at the time of the rate change).
+#[test]
+fn test_update_rate_increase() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    // rate=10/s, deposit=10_000
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+
+    // 100 s at old rate → 1000 tokens accrued but NOT withdrawn
+    env.ledger().with_mut(|l| l.timestamp += 100);
+
+    // Raise rate to 20/s — this also resets last_withdraw_time to now
+    client.update_rate(&employer, &id, &20);
+
+    let s = client.get_stream(&id);
+    assert_eq!(s.rate_per_second, 20);
+
+    // After another 50 s at new rate → 50 * 20 = 1000 more claimable
+    env.ledger().with_mut(|l| l.timestamp += 50);
+    assert_eq!(client.claimable(&id), 1000); // only accrual since rate change counts
+}
+
+/// Employer decreases the rate.
+#[test]
+fn test_update_rate_decrease() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+
+    env.ledger().with_mut(|l| l.timestamp += 100);
+    client.update_rate(&employer, &id, &5);
+
+    let s = client.get_stream(&id);
+    assert_eq!(s.rate_per_second, 5);
+
+    env.ledger().with_mut(|l| l.timestamp += 100);
+    assert_eq!(client.claimable(&id), 500); // 100 s * 5/s
+}
+
+/// update_rate works on a Paused stream.
+#[test]
+fn test_update_rate_on_paused_stream() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+
+    env.ledger().with_mut(|l| l.timestamp += 50);
+    client.pause_stream(&employer, &id);
+
+    // Update rate while paused
+    client.update_rate(&employer, &id, &20);
+    let s = client.get_stream(&id);
+    assert_eq!(s.rate_per_second, 20);
+    assert_eq!(s.status, StreamStatus::Paused);
+}
+
+/// zero rate is rejected with E001.
+#[test]
+#[should_panic(expected = "E001")]
+fn test_update_rate_zero_rejected() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+    client.update_rate(&employer, &id, &0);
+}
+
+/// rate above MAX_RATE_PER_SECOND is rejected with E008.
+#[test]
+#[should_panic(expected = "E008")]
+fn test_update_rate_too_high_rejected() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+    client.update_rate(&employer, &id, &1_000_000_001);
+}
+
+/// Non-employer caller is rejected.
+#[test]
+#[should_panic(expected = "not the employer")]
+fn test_update_rate_wrong_caller_rejected() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let attacker = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+    client.update_rate(&attacker, &id, &5);
+}
+
+/// update_rate on a Cancelled stream is rejected.
+#[test]
+#[should_panic(expected = "stream not active or paused")]
+fn test_update_rate_cancelled_stream_rejected() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+    client.cancel_stream(&employer, &id);
+    client.update_rate(&employer, &id, &5);
 }
 
 // ---------------------------------------------------------------------------
@@ -654,4 +810,102 @@ fn test_accept_admin_wrong_address_rejected() {
     client.initialize(&admin);
     client.propose_admin(&new_admin);
     client.accept_admin(&attacker); // wrong address
+}
+
+// ---------------------------------------------------------------------------
+// Issue #61 – TEST-12: Load test for streams_by_employer with 100+ streams
+// ---------------------------------------------------------------------------
+
+/// Load test: create 100 streams for a single employer and verify that
+/// `streams_by_employer` returns all 100 IDs correctly.
+///
+/// This test exercises the `EmployerStreams` persistent `Vec<u64>` index at
+/// scale and documents whether any Soroban value-size limits are approached.
+///
+/// Notes on SC-05 (`stream_count_by_employer`):
+/// That function is not yet implemented. Until it lands, the count is verified
+/// via `streams_by_employer(&employer).len()`. Switch to the dedicated function
+/// once SC-05 is merged.
+///
+/// CPU / memory observations (run locally with `cargo test -- --nocapture`):
+/// Soroban's testutils do not expose raw CPU-instruction or memory counters
+/// through the public SDK v22.0.0 API. To measure those metrics, run the
+/// contract against a local Stellar node with resource metering enabled and
+/// inspect the `TransactionMeta` field. See `benchmarks/gas-optimization-report.md`
+/// for the project's benchmarking approach. No Soroban value-size limits were
+/// triggered at 100 streams during manual testing.
+#[test]
+fn test_streams_by_employer_load_100() {
+    const STREAM_COUNT: u64 = 100;
+
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    // Disable the default min-deposit so small per-stream deposits work.
+    // Total tokens needed: STREAM_COUNT * deposit_per_stream.
+    // setup_token mints 1_000_000_000 so we have plenty of headroom.
+    client.set_min_deposit(&admin, &0, &100);
+
+    let mut expected_ids: soroban_sdk::Vec<u64> = soroban_sdk::Vec::new(&env);
+
+    for i in 0..STREAM_COUNT {
+        // Use a unique employee per stream to satisfy the employer != employee
+        // constraint and avoid any per-employee index collisions.
+        let employee = Address::generate(&env);
+        // deposit=1000, rate=1 — small values to keep the test fast.
+        let id = client.create_stream(&employer, &employee, &token_id, &1000, &1, &0);
+        assert_eq!(
+            id,
+            i + 1,
+            "stream IDs must be assigned sequentially starting at 1"
+        );
+        expected_ids.push_back(id);
+    }
+
+    // --- Verify stream_count ---
+    assert_eq!(
+        client.stream_count(),
+        STREAM_COUNT,
+        "stream_count() must equal the number of streams created"
+    );
+
+    // --- Verify streams_by_employer returns all 100 IDs ---
+    let employer_streams = client.streams_by_employer(&employer);
+
+    // Count check — proxy for stream_count_by_employer (SC-05).
+    // TODO: replace with client.stream_count_by_employer(&employer) once SC-05 lands.
+    assert_eq!(
+        employer_streams.len() as u64,
+        STREAM_COUNT,
+        "streams_by_employer must return exactly {STREAM_COUNT} IDs"
+    );
+
+    // Content check — every created ID must appear in the index.
+    for id in expected_ids.iter() {
+        assert!(
+            employer_streams.contains(id),
+            "stream ID {id} missing from streams_by_employer result"
+        );
+    }
+
+    // --- Verify each stream is retrievable and Active ---
+    for id in employer_streams.iter() {
+        let s = client.get_stream(&id);
+        assert_eq!(
+            s.status,
+            StreamStatus::Active,
+            "stream {id} should be Active"
+        );
+        assert_eq!(s.employer, employer, "stream {id} should belong to employer");
+    }
+
+    // --- Soroban limits documentation ---
+    // At 100 streams the EmployerStreams Vec holds 100 × 8-byte u64 values = 800 bytes.
+    // Soroban's persistent storage value size limit is 64 KiB per entry (as of SDK v22.0.0).
+    // 800 bytes is well within that limit. The limit would be approached at approximately
+    // 64 KiB / 8 bytes = 8,192 streams per employer. Recommend adding a test at 8,000+
+    // streams if large-scale employers are expected in production.
 }
