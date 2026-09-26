@@ -255,7 +255,31 @@ stellar contract invoke --id <STREAM_ID> --source <EMPLOYEE_KEY> --network testn
 
 ---
 
-### `top_up`
+### `withdraw_all`
+
+Employee withdraws all claimable tokens from every stream they receive in a single transaction. Auth is checked once. Cancelled and Paused streams are silently skipped; streams with nothing claimable are also skipped.
+
+**Caller:** Employee
+
+| Parameter | Type | Description |
+|---|---|---|
+| `employee` | `Address` | Employee address (requires auth, checked once) |
+
+**Returns:** `Vec<(u64, i128)>` — list of `(stream_id, amount_withdrawn)` pairs for every stream from which tokens were transferred; empty if nothing was claimable
+
+**Errors:**
+- Panics if contract is paused
+- E003 if a reentrant withdraw is detected on any stream
+
+**Gas note:** Each stream in the employee's index incurs one `token::transfer` cross-contract call. For a 10-stream portfolio this is roughly 10× the cost of a single `withdraw` call; plan accordingly for large indexes.
+
+**Example:**
+```bash
+stellar contract invoke --id <STREAM_ID> --source <EMPLOYEE_KEY> --network testnet \
+  -- withdraw_all --employee <EMPLOYEE_ADDRESS>
+```
+
+---
 
 Employer adds more funds to an active stream.
 

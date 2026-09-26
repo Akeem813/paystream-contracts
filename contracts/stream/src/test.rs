@@ -1159,3 +1159,130 @@ fn test_top_up_deposit_overflow_uses_err_overflow() {
     // top_up with 1 should panic with E004, not a generic "deposit overflow" message.
     client.top_up(&employer, &id, &1);
 }
+
+// ---------------------------------------------------------------------------
+// Issue #4 – withdraw_all helper for employee
+// ---------------------------------------------------------------------------
+
+/// Employee with 3 active streams, all with claimable tokens — all 3 are
+/// withdrawn in a single withdraw_all call.
+#[test]
+fn test_withdraw_all_three_streams() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let id1 = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+    let id2 = client.create_stream(&employer, &employee, &token_id, &10_000, &5, &0);
+    let id3 = client.create_stream(&employer, &employee, &token_id, &10_000, &1, &0);
+
+    env.ledger().with_mut(|l| l.timestamp += 100);
+    let results = client.withdraw_all(&employee);
+
+    // All three streams yielded tokens
+    assert_eq!(results.len(), 3);
+
+    // Verify each (stream_id, amount) pair
+    let r0 = results.get(0).unwrap();
+    assert_eq!(r0.0, id1);
+    assert_eq!(r0.1, 1000); // 100s * 10/s
+
+    let r1 = results.get(1).unwrap();
+    assert_eq!(r1.0, id2);
+    assert_eq!(r1.1, 500); // 100s * 5/s
+
+    let r2 = results.get(2).unwrap();
+    assert_eq!(r2.0, id3);
+    assert_eq!(r2.1, 100); // 100s * 1/s
+}
+
+/// Streams where claimable == 0 are silently skipped (no revert).
+#[test]
+fn test_withdraw_all_skips_zero_claimable() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let _id1 = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+    let _id2 = client.create_stream(&employer, &employee, &token_id, &10_000, &5, &0);
+
+    // No time has passed → nothing claimable
+    let results = client.withdraw_all(&employee);
+    assert_eq!(results.len(), 0);
+}
+
+/// Cancelled and Paused streams are silently skipped (no revert).
+#[test]
+fn test_withdraw_all_skips_cancelled_and_paused() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let id1 = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+    let id2 = client.create_stream(&employer, &employee, &token_id, &10_000, &5, &0);
+    let id3 = client.create_stream(&employer, &employee, &token_id, &10_000, &1, &0);
+
+    env.ledger().with_mut(|l| l.timestamp += 50);
+
+    // Cancel stream 1, pause stream 2 — only stream 3 should be withdrawn
+    client.cancel_stream(&employer, &id1);
+    client.pause_stream(&employer, &id2);
+
+    env.ledger().with_mut(|l| l.timestamp += 50);
+    let results = client.withdraw_all(&employee);
+
+    // Only stream 3 is Active with claimable tokens
+    assert_eq!(results.len(), 1);
+    let r0 = results.get(0).unwrap();
+    assert_eq!(r0.0, id3);
+    // 100 seconds total active for stream 3 (pause on id2 doesn't affect id3)
+    assert_eq!(r0.1, 100); // 100s * 1/s
+}
+
+/// withdraw_all returns empty vec when employee has no streams at all.
+#[test]
+fn test_withdraw_all_no_streams_returns_empty() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employee = Address::generate(&env);
+    client.initialize(&admin);
+
+    let results = client.withdraw_all(&employee);
+    assert_eq!(results.len(), 0);
+}
+
+/// Partial claimable: some streams have tokens, some do not (e.g. one was
+/// just created with no elapsed time).
+#[test]
+fn test_withdraw_all_partial_claimable() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let id1 = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+
+    env.ledger().with_mut(|l| l.timestamp += 100);
+
+    // Create id2 after time has advanced — it starts now, so 0 claimable
+    let _id2 = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+
+    let results = client.withdraw_all(&employee);
+
+    // Only id1 has claimable tokens
+    assert_eq!(results.len(), 1);
+    let r0 = results.get(0).unwrap();
+    assert_eq!(r0.0, id1);
+    assert_eq!(r0.1, 1000); // 100s * 10/s
+}
