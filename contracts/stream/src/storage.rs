@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::types::{DataKey, Stream, StreamStatus, ERR_BAD_NONCE, ERR_OVERFLOW};
+use crate::types::{DataKey, Stream, StreamStatus, ERR_ADMIN_NOT_SET, ERR_BAD_NONCE, ERR_OVERFLOW};
 use soroban_sdk::{Address, Env, Vec};
 
 /// Default minimum deposit (10_000 stroops = 0.001 XLM equivalent).
@@ -54,7 +54,7 @@ pub fn get_admin(env: &Env) -> Address {
     env.storage()
         .instance()
         .get(&DataKey::Admin)
-        .expect("admin not set")
+        .expect(ERR_ADMIN_NOT_SET)
 }
 
 pub fn set_pending_admin(env: &Env, pending: &Address) {
@@ -67,8 +67,23 @@ pub fn get_pending_admin(env: &Env) -> Option<Address> {
     env.storage().instance().get(&DataKey::PendingAdmin)
 }
 
+pub fn set_pending_admin_nonce(env: &Env, nonce: u64) {
+    env.storage()
+        .instance()
+        .set(&DataKey::PendingAdminNonce, &nonce);
+}
+
+pub fn get_pending_admin_nonce(env: &Env) -> Option<u64> {
+    env.storage()
+        .instance()
+        .get(&DataKey::PendingAdminNonce)
+}
+
 pub fn clear_pending_admin(env: &Env) {
     env.storage().instance().remove(&DataKey::PendingAdmin);
+    env.storage()
+        .instance()
+        .remove(&DataKey::PendingAdminNonce);
 }
 
 pub fn get_min_deposit(env: &Env) -> i128 {

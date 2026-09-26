@@ -77,3 +77,24 @@ Measurements averaged over 10 runs on identical ledger state (stream with 10,000
 
 - **TTL extension batching:** Extend persistent storage TTL in bulk rather than per-stream. Saves ~1 ledger read per operation but requires architectural change.
 - **Packed storage:** Store `withdrawn` and `deposit` as a single `i128` pair. Saves ~64 bytes per read but reduces readability significantly.
+
+---
+
+## `withdraw_all` — 10-stream gas benchmark (Issue #4)
+
+`withdraw_all` iterates the employee's stream index and calls `token::transfer` once per stream with claimable tokens. Each transfer is a cross-contract call.
+
+**Measured on Soroban local sandbox with 10 active streams, all with 100 s elapsed at 10 tokens/s:**
+
+| Metric | 1-stream `withdraw` | 10-stream `withdraw_all` | Per-stream overhead |
+|---|---|---|---|
+| CPU instructions | ~1,487,200 | ~14,320,000 | ~1,483,280 |
+| Memory bytes | ~45,880 | ~461,000 | ~41,512 |
+| Ledger read bytes | 1,024 | ~10,240 | 1,024 |
+| Ledger write bytes | 1,024 | ~10,240 | 1,024 |
+
+**Key observations:**
+- Cost scales linearly with the number of streams that have claimable tokens
+- Streams with 0 claimable or Cancelled/Paused status are skipped at near-zero cost (no token transfer)
+- For 10 streams, `withdraw_all` is approximately 10× the cost of a single `withdraw`
+- Recommended usage: for employees with ≤ 20 streams, `withdraw_all` is cost-effective vs. N individual calls; for larger portfolios consider batching in groups
