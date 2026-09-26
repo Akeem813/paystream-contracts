@@ -77,12 +77,31 @@ pub enum DataKey {
 /// Contract error codes – panic messages reference these names so callers can
 /// match on a stable string.
 ///
-/// | Code | Constant            | Meaning                                      |
-/// |------|---------------------|----------------------------------------------|
-/// | E001 | ERR_ZERO_RATE       | `rate_per_second` must be > 0                |
-/// | E002 | ERR_ZERO_DEPOSIT    | `deposit` must be > 0                        |
-/// | E003 | ERR_REENTRANT       | Reentrant withdraw detected                  |
-/// | E004 | ERR_OVERFLOW        | Arithmetic overflow in claimable calculation |
+/// | Code | Constant                | Meaning                                            |
+/// |------|-------------------------|----------------------------------------------------|
+/// | E001 | ERR_ZERO_RATE           | `rate_per_second` must be > 0                      |
+/// | E002 | ERR_ZERO_DEPOSIT        | `deposit` must be > 0                              |
+/// | E003 | ERR_REENTRANT           | Reentrant withdraw detected                        |
+/// | E004 | ERR_OVERFLOW            | Arithmetic overflow in claimable calculation       |
+/// | E005 | ERR_STREAM_CANCELLED    | Cannot top up a cancelled stream                   |
+/// | E006 | ERR_STREAM_EXHAUSTED    | Cannot top up an exhausted stream                  |
+/// | E007 | ERR_BELOW_MIN_DEPOSIT   | Deposit below minimum                              |
+/// | E008 | ERR_INVALID_RATE        | `rate_per_second` exceeds maximum                  |
+/// | E009 | ERR_BAD_NONCE           | Invalid admin nonce                                |
+/// | E010 | ERR_NO_PENDING_ADMIN    | No pending admin set                               |
+/// | E011 | ERR_NOT_PENDING_ADMIN   | Caller does not match the pending admin            |
+/// | E012 | ERR_NOT_ADMIN           | Caller is not the contract admin                   |
+/// | E013 | ERR_CONTRACT_PAUSED     | Contract is paused                                 |
+/// | E014 | ERR_EMPTY_PARAMS        | Batch params list must not be empty                |
+/// | E015 | ERR_STREAM_NOT_FOUND    | Stream ID does not exist                           |
+/// | E016 | ERR_NOT_EMPLOYEE        | Caller is not the stream's employee                |
+/// | E017 | ERR_STREAM_NOT_ACTIVE   | Stream is not in Active or Exhausted status        |
+/// | E018 | ERR_NOT_EMPLOYER        | Caller is not the stream's employer                |
+/// | E019 | ERR_STREAM_NOT_PAUSED   | Stream is not in Paused status                     |
+/// | E020 | ERR_STREAM_ALREADY_ENDED| Stream is already Cancelled or Exhausted           |
+/// | E021 | ERR_ADMIN_NOT_SET       | Admin has not been initialised                     |
+/// | E022 | ERR_STOP_TIME_PAST      | `stop_time` must be in the future                  |
+/// | E023 | ERR_AMOUNT_NOT_POSITIVE | Amount must be positive                            |
 pub const ERR_ZERO_RATE: &str = "E001: rate_per_second must be greater than zero";
 pub const ERR_ZERO_DEPOSIT: &str = "E002: deposit must be positive";
 pub const ERR_REENTRANT: &str = "E003: reentrant withdraw detected";
