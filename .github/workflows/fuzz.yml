@@ -31,3 +31,6 @@ jobs:
 
       - name: Run proptest fuzz (1 000 000 iterations) — withdraw
         run: cargo test --package paystream-stream-fuzz --bin fuzz_withdraw
+
+      - name: Run proptest fuzz (1 000 000 iterations) — create_stream
+        run: cargo test --package paystream-stream-fuzz --bin fuzz_create_stream
