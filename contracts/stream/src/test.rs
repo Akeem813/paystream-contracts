@@ -1416,3 +1416,78 @@ fn test_stream_count_by_employee_matches_list_length() {
     assert_eq!(count, list_len);
     assert_eq!(count, 2);
 }
+
+// ---------------------------------------------------------------------------
+// SC-06 – stream_status lightweight query
+// ---------------------------------------------------------------------------
+
+/// stream_status returns Active for a newly created stream.
+#[test]
+fn test_stream_status_active() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+    assert_eq!(client.stream_status(&id), StreamStatus::Active);
+}
+
+/// stream_status returns Paused after pause_stream.
+#[test]
+fn test_stream_status_paused() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+    client.pause_stream(&employer, &id);
+    assert_eq!(client.stream_status(&id), StreamStatus::Paused);
+}
+
+/// stream_status returns Cancelled after cancel_stream.
+#[test]
+fn test_stream_status_cancelled() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+    client.cancel_stream(&employer, &id);
+    assert_eq!(client.stream_status(&id), StreamStatus::Cancelled);
+}
+
+/// stream_status returns Exhausted once the full deposit is withdrawn.
+#[test]
+fn test_stream_status_exhausted() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    client.set_min_deposit(&admin, &0, &100);
+    let id = client.create_stream(&employer, &employee, &token_id, &500, &10, &0);
+    env.ledger().with_mut(|l| l.timestamp += 100);
+    client.withdraw(&employee, &id);
+    assert_eq!(client.stream_status(&id), StreamStatus::Exhausted);
+}
+
+/// stream_status panics with "stream not found" for a non-existent stream.
+#[test]
+#[should_panic(expected = "stream not found")]
+fn test_stream_status_not_found_panics() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+    client.stream_status(&999);
+}

@@ -126,6 +126,7 @@ The `cargo-cache` volume persists the Cargo registry between runs so subsequent 
 | `resume_stream(employer, stream_id)` | Employer | Resume accrual |
 | `cancel_stream(employer, stream_id)` | Employer | Pay employee earned share, refund remainder |
 | `get_stream(stream_id)` | Anyone | Read stream state |
+| `stream_status(stream_id)` | Anyone | Query stream status only (lightweight) |
 | `claimable(stream_id)` | Anyone | Query withdrawable amount right now |
 | `stream_count()` | Anyone | Total streams created |
 | `stream_count_by_employer(employer)` | Anyone | Number of streams owned by an employer |
