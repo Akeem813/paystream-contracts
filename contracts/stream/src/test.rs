@@ -517,6 +517,144 @@ fn test_top_up_zero_amount_rejected() {
 }
 
 // ---------------------------------------------------------------------------
+// Issue #27 – update_rate: change stream rate without cancel/recreate
+// ---------------------------------------------------------------------------
+
+/// Employer increases the rate; claimable is recalculated at the new rate
+/// going forward (old accrual is settled at the time of the rate change).
+#[test]
+fn test_update_rate_increase() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    // rate=10/s, deposit=10_000
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+
+    // 100 s at old rate → 1000 tokens accrued but NOT withdrawn
+    env.ledger().with_mut(|l| l.timestamp += 100);
+
+    // Raise rate to 20/s — this also resets last_withdraw_time to now
+    client.update_rate(&employer, &id, &20);
+
+    let s = client.get_stream(&id);
+    assert_eq!(s.rate_per_second, 20);
+
+    // After another 50 s at new rate → 50 * 20 = 1000 more claimable
+    env.ledger().with_mut(|l| l.timestamp += 50);
+    assert_eq!(client.claimable(&id), 1000); // only accrual since rate change counts
+}
+
+/// Employer decreases the rate.
+#[test]
+fn test_update_rate_decrease() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+
+    env.ledger().with_mut(|l| l.timestamp += 100);
+    client.update_rate(&employer, &id, &5);
+
+    let s = client.get_stream(&id);
+    assert_eq!(s.rate_per_second, 5);
+
+    env.ledger().with_mut(|l| l.timestamp += 100);
+    assert_eq!(client.claimable(&id), 500); // 100 s * 5/s
+}
+
+/// update_rate works on a Paused stream.
+#[test]
+fn test_update_rate_on_paused_stream() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+
+    env.ledger().with_mut(|l| l.timestamp += 50);
+    client.pause_stream(&employer, &id);
+
+    // Update rate while paused
+    client.update_rate(&employer, &id, &20);
+    let s = client.get_stream(&id);
+    assert_eq!(s.rate_per_second, 20);
+    assert_eq!(s.status, StreamStatus::Paused);
+}
+
+/// zero rate is rejected with E001.
+#[test]
+#[should_panic(expected = "E001")]
+fn test_update_rate_zero_rejected() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+    client.update_rate(&employer, &id, &0);
+}
+
+/// rate above MAX_RATE_PER_SECOND is rejected with E008.
+#[test]
+#[should_panic(expected = "E008")]
+fn test_update_rate_too_high_rejected() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+    client.update_rate(&employer, &id, &1_000_000_001);
+}
+
+/// Non-employer caller is rejected.
+#[test]
+#[should_panic(expected = "not the employer")]
+fn test_update_rate_wrong_caller_rejected() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let attacker = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+    client.update_rate(&attacker, &id, &5);
+}
+
+/// update_rate on a Cancelled stream is rejected.
+#[test]
+#[should_panic(expected = "stream not active or paused")]
+fn test_update_rate_cancelled_stream_rejected() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+    client.cancel_stream(&employer, &id);
+    client.update_rate(&employer, &id, &5);
+}
+
+// ---------------------------------------------------------------------------
 // Issue #20 – Contract upgrade / migration path
 // ---------------------------------------------------------------------------
 

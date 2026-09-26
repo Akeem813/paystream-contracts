@@ -28,3 +28,11 @@ pub fn topped_up(env: &Env, id: u64, employer: &Address, amount: i128) {
 pub fn contract_paused(env: &Env, paused: bool) {
     env.events().publish((symbol_short!("paused"),), paused);
 }
+
+/// Emitted when `update_rate` changes the stream's `rate_per_second`.
+pub fn rate_updated(env: &Env, stream_id: u64, old_rate: i128, new_rate: i128) {
+    env.events().publish(
+        (symbol_short!("rate_upd"), stream_id),
+        (old_rate, new_rate),
+    );
+}
