@@ -9,8 +9,8 @@ mod types;
 mod test;
 
 use crate::storage::{
-    allowance, balance_of, get_admin, set_admin, set_allowance, set_balance, set_total_supply,
-    total_supply,
+    allowance, balance_of, get_admin, has_admin, set_admin, set_allowance, set_balance,
+    set_total_supply, total_supply,
 };
 use soroban_sdk::{contract, contractimpl, Address, Env};
 
@@ -29,9 +29,11 @@ impl TokenContract {
     /// - `initial_supply` — tokens minted to `admin` on initialisation
     ///
     /// # Errors
+    /// - Panics if the contract has already been initialised ("already initialized")
     /// - Panics if `admin` auth fails
     pub fn initialize(env: Env, admin: Address, initial_supply: i128) {
         admin.require_auth();
+        assert!(!has_admin(&env), "already initialized");
         set_admin(&env, &admin);
         set_balance(&env, &admin, initial_supply);
         set_total_supply(&env, initial_supply);
