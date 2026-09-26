@@ -10,6 +10,8 @@ Full documentation for every PayStream contract function: parameters, return val
 
 Set the contract admin. Must be called once after deployment before any other function.
 
+Emits a `contract_initialized` event on success so off-chain indexers can determine when and by whom the contract was initialised.
+
 **Caller:** Admin
 
 | Parameter | Type | Description |
