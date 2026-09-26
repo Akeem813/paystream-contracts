@@ -637,6 +637,67 @@ impl StreamContract {
         );
     }
 
+    /// Employer cancels multiple streams atomically in a single transaction.
+    ///
+    /// Mirrors `create_streams_batch`: all cancellations succeed or all revert.
+    /// The employer pays each employee their earned share and is refunded the
+    /// remainder for every stream in the batch. Cheaper than N individual
+    /// `cancel_stream` calls for N ≥ 2 because Stellar charges one base fee
+    /// per transaction.
+    ///
+    /// # Parameters
+    /// - `employer` — employer address; must own every stream in the list (requires auth once)
+    /// - `stream_ids` — IDs of the streams to cancel; must not be empty
+    ///
+    /// # Errors
+    /// - Panics if `stream_ids` is empty
+    /// - Panics if any stream is not found
+    /// - Panics if any stream does not belong to `employer`
+    /// - Panics if any stream is already Cancelled or Exhausted
+    pub fn cancel_streams_batch(env: Env, employer: Address, stream_ids: Vec<u64>) {
+        employer.require_auth();
+        assert!(!stream_ids.is_empty(), "stream_ids must not be empty");
+
+        let now = env.ledger().timestamp();
+
+        for stream_id in stream_ids.iter() {
+            let mut stream = load_stream(&env, stream_id).expect("stream not found");
+            assert_eq!(stream.employer, employer, "not the employer");
+            assert!(
+                stream.status == StreamStatus::Active || stream.status == StreamStatus::Paused,
+                "stream already ended"
+            );
+
+            let claimable = claimable_amount(&stream, now);
+            let token_client = token::Client::new(&env, &stream.token);
+
+            if claimable > 0 {
+                token_client.transfer(
+                    &env.current_contract_address(),
+                    &stream.employee,
+                    &claimable,
+                );
+                stream.withdrawn = stream
+                    .withdrawn
+                    .checked_add(claimable)
+                    .expect("withdrawn overflow");
+            }
+
+            let refund = stream
+                .deposit
+                .checked_sub(stream.withdrawn)
+                .unwrap_or(0)
+                .max(0);
+            if refund > 0 {
+                token_client.transfer(&env.current_contract_address(), &employer, &refund);
+            }
+
+            stream.status = StreamStatus::Cancelled;
+            save_stream(&env, &stream);
+            events::stream_status_changed(&env, stream_id, &StreamStatus::Cancelled);
+        }
+    }
+
     /// Read the full state of a stream by ID.
     ///
     /// # Parameters

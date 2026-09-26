@@ -1491,3 +1491,120 @@ fn test_stream_status_not_found_panics() {
     client.initialize(&admin);
     client.stream_status(&999);
 }
+
+// ---------------------------------------------------------------------------
+// SC-03 – cancel_streams_batch
+// ---------------------------------------------------------------------------
+
+/// Happy path: batch cancel two active streams atomically.
+#[test]
+fn test_cancel_streams_batch_happy_path() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee1 = Address::generate(&env);
+    let employee2 = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let id1 = client.create_stream(&employer, &employee1, &token_id, &10_000, &10, &0);
+    let id2 = client.create_stream(&employer, &employee2, &token_id, &10_000, &10, &0);
+
+    env.ledger().with_mut(|l| l.timestamp += 100);
+
+    let mut ids = soroban_sdk::Vec::new(&env);
+    ids.push_back(id1);
+    ids.push_back(id2);
+    client.cancel_streams_batch(&employer, &ids);
+
+    assert_eq!(client.get_stream(&id1).status, StreamStatus::Cancelled);
+    assert_eq!(client.get_stream(&id2).status, StreamStatus::Cancelled);
+    // Each employee should have received their earned share (100s * 10/s = 1000)
+    assert_eq!(client.get_stream(&id1).withdrawn, 1000);
+    assert_eq!(client.get_stream(&id2).withdrawn, 1000);
+}
+
+/// Batch cancel also works on paused streams.
+#[test]
+fn test_cancel_streams_batch_includes_paused_stream() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+
+    env.ledger().with_mut(|l| l.timestamp += 50);
+    client.pause_stream(&employer, &id);
+
+    let mut ids = soroban_sdk::Vec::new(&env);
+    ids.push_back(id);
+    client.cancel_streams_batch(&employer, &ids);
+
+    assert_eq!(client.get_stream(&id).status, StreamStatus::Cancelled);
+}
+
+/// Empty stream_ids list must be rejected.
+#[test]
+#[should_panic(expected = "stream_ids must not be empty")]
+fn test_cancel_streams_batch_empty_list_rejected() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    client.initialize(&admin);
+
+    let ids: soroban_sdk::Vec<u64> = soroban_sdk::Vec::new(&env);
+    client.cancel_streams_batch(&employer, &ids);
+}
+
+/// If any stream in the batch is already cancelled, the whole batch reverts.
+#[test]
+#[should_panic(expected = "stream already ended")]
+fn test_cancel_streams_batch_partial_failure_reverts_all() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let id1 = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+    let id2 = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+
+    // Cancel id2 individually first
+    client.cancel_stream(&employer, &id2);
+
+    // Now try batch cancel with id1 (active) and id2 (already cancelled)
+    // → must panic because id2 is already ended
+    let mut ids = soroban_sdk::Vec::new(&env);
+    ids.push_back(id1);
+    ids.push_back(id2);
+    client.cancel_streams_batch(&employer, &ids);
+}
+
+/// A stream not belonging to the employer must cause a panic.
+#[test]
+#[should_panic(expected = "not the employer")]
+fn test_cancel_streams_batch_wrong_employer_rejected() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer1 = Address::generate(&env);
+    let employer2 = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer1);
+
+    // Give employer2 some tokens too
+    let token = paystream_token::TokenContractClient::new(&env, &token_id);
+    token.mint(&employer1, &employer2, &10_000);
+
+    client.initialize(&admin);
+    // Stream owned by employer1
+    let id = client.create_stream(&employer1, &employee, &token_id, &10_000, &10, &0);
+
+    // employer2 tries to batch cancel employer1's stream — must panic
+    let mut ids = soroban_sdk::Vec::new(&env);
+    ids.push_back(id);
+    client.cancel_streams_batch(&employer2, &ids);
+}

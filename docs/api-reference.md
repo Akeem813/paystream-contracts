@@ -424,6 +424,33 @@ stellar contract invoke --id <STREAM_ID> --source <EMPLOYER_KEY> --network testn
 
 ---
 
+### `cancel_streams_batch`
+
+Employer cancels multiple streams atomically in a single transaction. All cancellations succeed or all revert. Cheaper than N individual `cancel_stream` calls for N ≥ 2.
+
+**Caller:** Employer
+
+| Parameter | Type | Description |
+|---|---|---|
+| `employer` | `Address` | Must own every stream in the list (requires auth once) |
+| `stream_ids` | `Vec<u64>` | IDs of streams to cancel; must not be empty |
+
+**Returns:** nothing
+
+**Errors:**
+- Panics if `stream_ids` is empty
+- Panics if any stream is not found
+- Panics if any stream does not belong to `employer`
+- Panics if any stream is already Cancelled or Exhausted (reverts entire batch)
+
+**Example:**
+```bash
+stellar contract invoke --id <STREAM_ID> --source <EMPLOYER_KEY> --network testnet \
+  -- cancel_streams_batch --employer <EMPLOYER_ADDRESS> --stream_ids '[1,2,3]'
+```
+
+---
+
 ### `get_stream`
 
 Read the full state of a stream by ID.
