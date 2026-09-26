@@ -14,6 +14,7 @@ Thank you for contributing to PayStream — a Soroban smart contract system for 
 - [Project Structure](#project-structure)
 - [Coding Standards](#coding-standards)
 - [Commit Conventions](#commit-conventions)
+- [Bounty Program & Finding Issues](#bounty-program--finding-issues)
 - [Pull Request Process](#pull-request-process)
 - [Testing Requirements](#testing-requirements)
 - [Code Review Expectations](#code-review-expectations)
@@ -170,7 +171,7 @@ The `cargo-cache` volume persists across runs so subsequent builds are fast. WAS
 
 ### Contract-specific rules
 
-- Every state-changing function must emit an event via `events.rs`
+- Every state-changing function must emit an event via `events.rs` — this includes `initialize`, which must emit a `contract_initialized` event so off-chain indexers can determine when and by whom the contract was initialised
 - Authorization must be checked with `address.require_auth()` before any state mutation
 - Reentrancy guards (`stream.locked`) must be set before any cross-contract call and released after
 - New storage keys belong in the `DataKey` enum in `types.rs`
@@ -239,6 +240,15 @@ chore: bump soroban-sdk to 22.0.0
 - No period at the end of the subject line
 - Reference issues in the footer: `Closes #15` or `Fixes #3`
 - Breaking changes must include `BREAKING CHANGE:` in the footer
+
+---
+
+## Bounty Program & Finding Issues
+
+Looking for tasks to contribute to?
+
+- **Bounty Program**: PayStream hosts open bounties with defined criteria for merged PRs. See [docs/bounties.md](docs/bounties.md) for active bounty categories, rules, and claiming instructions.
+- **Good First Issues**: If you are new to the codebase, check out issues tagged with [`good-first-issue`](https://github.com/veracindarella/paystream-contracts/issues?q=is%3Aissue+is%3Aopen+label%3Agood-first-issue).
 
 ---
 

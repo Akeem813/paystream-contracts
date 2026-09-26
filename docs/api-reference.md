@@ -10,6 +10,8 @@ Full documentation for every PayStream contract function: parameters, return val
 
 Set the contract admin. Must be called once after deployment before any other function.
 
+Emits a `contract_initialized` event on success so off-chain indexers can determine when and by whom the contract was initialised.
+
 **Caller:** Admin
 
 | Parameter | Type | Description |
@@ -255,7 +257,31 @@ stellar contract invoke --id <STREAM_ID> --source <EMPLOYEE_KEY> --network testn
 
 ---
 
-### `top_up`
+### `withdraw_all`
+
+Employee withdraws all claimable tokens from every stream they receive in a single transaction. Auth is checked once. Cancelled and Paused streams are silently skipped; streams with nothing claimable are also skipped.
+
+**Caller:** Employee
+
+| Parameter | Type | Description |
+|---|---|---|
+| `employee` | `Address` | Employee address (requires auth, checked once) |
+
+**Returns:** `Vec<(u64, i128)>` — list of `(stream_id, amount_withdrawn)` pairs for every stream from which tokens were transferred; empty if nothing was claimable
+
+**Errors:**
+- Panics if contract is paused
+- E003 if a reentrant withdraw is detected on any stream
+
+**Gas note:** Each stream in the employee's index incurs one `token::transfer` cross-contract call. For a 10-stream portfolio this is roughly 10× the cost of a single `withdraw` call; plan accordingly for large indexes.
+
+**Example:**
+```bash
+stellar contract invoke --id <STREAM_ID> --source <EMPLOYEE_KEY> --network testnet \
+  -- withdraw_all --employee <EMPLOYEE_ADDRESS>
+```
+
+---
 
 Employer adds more funds to an active stream.
 
@@ -337,6 +363,39 @@ stellar contract invoke --id <STREAM_ID> --source <EMPLOYER_KEY> --network testn
 
 ---
 
+### `update_rate`
+
+Employer changes the `rate_per_second` of an Active or Paused stream without cancelling and recreating it.
+
+Before applying the new rate, any tokens accrued since the last withdrawal are settled by resetting `last_withdraw_time` to the current ledger timestamp. The employee is credited at the old rate for all elapsed time; future accrual uses the new rate.
+
+**Caller:** Employer
+
+| Parameter | Type | Description |
+|---|---|---|
+| `employer` | `Address` | Must match the stream's employer |
+| `stream_id` | `u64` | ID of the stream to update |
+| `new_rate` | `i128` | New tokens-per-second rate (1 – 1,000,000,000) |
+
+**Returns:** nothing
+
+**Errors:**
+- Panics if stream not found
+- Panics if caller is not the stream's employer
+- Panics if stream is not Active or Paused
+- E001 if `new_rate` ≤ 0
+- E008 if `new_rate` > 1,000,000,000
+
+**Emitted event:** `rate_updated(stream_id, old_rate, new_rate)`
+
+**Example:**
+```bash
+stellar contract invoke --id <STREAM_ID> --source <EMPLOYER_KEY> --network testnet \
+  -- update_rate --employer <EMPLOYER_ADDRESS> --stream_id 1 --new_rate 20
+```
+
+---
+
 ### `cancel_stream`
 
 Employer cancels a stream. The employee receives all earned tokens; the employer is refunded the remainder.
@@ -354,6 +413,8 @@ Employer cancels a stream. The employee receives all earned tokens; the employer
 - Panics if stream not found
 - Panics if caller is not the stream's employer
 - Panics if stream is already Cancelled or Exhausted
+
+**Emitted event:** `stream_cancelled` (enriched — see [Events](#events) section)
 
 **Example:**
 ```bash
@@ -426,6 +487,30 @@ Read the full state of a stream by ID.
 ```bash
 stellar contract invoke --id <STREAM_ID> --source <ANY_KEY> --network testnet \
   -- get_stream --stream_id 1
+```
+
+---
+
+### `stream_status`
+
+Query only the status of a stream by ID. Lighter than `get_stream` for read-heavy off-chain
+indexers that only need to know whether a stream is Active, Paused, Cancelled, or Exhausted (SC-06).
+
+**Caller:** Anyone
+
+| Parameter | Type | Description |
+|---|---|---|
+| `stream_id` | `u64` | ID of the stream to query |
+
+**Returns:** `StreamStatus` — one of `Active`, `Paused`, `Cancelled`, `Exhausted`
+
+**Errors:**
+- Panics with "stream not found" if no stream exists for `stream_id`
+
+**Example:**
+```bash
+stellar contract invoke --id <STREAM_ID> --source <ANY_KEY> --network testnet \
+  -- stream_status --stream_id 1
 ```
 
 ---
@@ -542,6 +627,46 @@ stellar contract invoke --id <STREAM_ID> --source <ANY_KEY> --network testnet \
 
 ---
 
+### `stream_count_by_employer`
+
+Return the number of streams owned by an employer. Equivalent to `streams_by_employer(employer).len()` but avoids loading the full ID vector — useful for pagination and dashboards.
+
+**Caller:** Anyone
+
+| Parameter | Type | Description |
+|---|---|---|
+| `employer` | `Address` | Employer address to query |
+
+**Returns:** `u64` — stream count; 0 if the address has no streams
+
+**Example:**
+```bash
+stellar contract invoke --id <STREAM_ID> --source <ANY_KEY> --network testnet \
+  -- stream_count_by_employer --employer <EMPLOYER_ADDRESS>
+```
+
+---
+
+### `stream_count_by_employee`
+
+Return the number of streams paying an employee. Equivalent to `streams_by_employee(employee).len()` but avoids loading the full ID vector — useful for pagination and dashboards.
+
+**Caller:** Anyone
+
+| Parameter | Type | Description |
+|---|---|---|
+| `employee` | `Address` | Employee address to query |
+
+**Returns:** `u64` — stream count; 0 if the address has no streams
+
+**Example:**
+```bash
+stellar contract invoke --id <STREAM_ID> --source <ANY_KEY> --network testnet \
+  -- stream_count_by_employee --employee <EMPLOYEE_ADDRESS>
+```
+
+---
+
 ### `admin_nonce`
 
 Return the current admin nonce. Use this to build the next admin transaction.
@@ -579,7 +704,7 @@ Admin upgrades the contract WASM in-place.
 
 ### `migrate`
 
-No-op migration hook called by the admin after an upgrade to confirm the new WASM is operational.
+Migration hook called by the admin after an upgrade to confirm the new WASM is operational. Also writes the compile-time `CONTRACT_VERSION` constant (`1` as of the current release) into instance storage so that `version()` can be queried off-chain.
 
 **Caller:** Admin
 
@@ -588,6 +713,31 @@ No-op migration hook called by the admin after an upgrade to confirm the new WAS
 | `admin` | `Address` | Must match the stored admin |
 
 **Returns:** nothing
+
+**Side effects:**
+- Writes `CONTRACT_VERSION` to `DataKey::Version` in instance storage.
+
+**Example:**
+```bash
+stellar contract invoke --id <STREAM_ID> --source <ADMIN_KEY> --network testnet \
+  -- migrate --admin <ADMIN_ADDRESS>
+```
+
+---
+
+### `version`
+
+Return the contract version stored by the last `migrate` call. Returns `0` if `migrate` has never been called (pre-upgrade / initial deployment state).
+
+**Caller:** Anyone
+
+**Returns:** `u32` — current contract version (1 after the first `migrate`)
+
+**Example:**
+```bash
+stellar contract invoke --id <STREAM_ID> --source <ANY_KEY> --network testnet \
+  -- version
+```
 
 ---
 
@@ -800,6 +950,42 @@ Burn tokens on behalf of `from` using an existing allowance.
 stellar contract invoke --id <TOKEN_ID> --source <SPENDER_KEY> --network testnet \
   -- burn_from --spender <SPENDER_ADDRESS> --from <FROM_ADDRESS> --amount 500
 ```
+
+---
+
+## Events
+
+All events are emitted via `env.events().publish()`. The topic tuple is `(symbol, stream_id)` and the data tuple carries the payload described below.
+
+### `stream_cancelled`
+
+Emitted by `cancel_stream` instead of the generic status event. Carries the exact cash-flow amounts so off-chain indexers can track fund movements without re-simulating the transaction.
+
+| Field | Type | Description |
+|---|---|---|
+| `stream_id` | `u64` | ID of the cancelled stream (in topics) |
+| `employer` | `Address` | Employer address (refund recipient) |
+| `employee` | `Address` | Employee address (claimable recipient) |
+| `claimable_paid` | `i128` | Tokens transferred to the employee at cancellation |
+| `refund_paid` | `i128` | Tokens returned to the employer |
+
+**Topics:** `("cancelled", stream_id)`
+**Data:** `(employer, employee, claimable_paid, refund_paid)`
+
+---
+
+### `rate_updated`
+
+Emitted by `update_rate` when the employer changes the stream's `rate_per_second`.
+
+| Field | Type | Description |
+|---|---|---|
+| `stream_id` | `u64` | ID of the updated stream (in topics) |
+| `old_rate` | `i128` | Previous `rate_per_second` value |
+| `new_rate` | `i128` | New `rate_per_second` value |
+
+**Topics:** `("rate_upd", stream_id)`
+**Data:** `(old_rate, new_rate)`
 
 ---
 
