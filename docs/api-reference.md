@@ -1010,6 +1010,10 @@ Emitted by `update_rate` when the employer changes the stream's `rate_per_second
 ```
 Active → Paused → Active
 Active → Cancelled
-Active → Exhausted  (deposit fully streamed)
+Active → Exhausted  (deposit fully streamed, or stop_time passed with no remaining tokens)
 Paused → Cancelled
 ```
+
+`settle_stream` (callable by anyone) triggers the Active → Exhausted transition for streams
+whose `stop_time` has passed and whose deposit is fully streamed. `withdraw` performs the
+same transition automatically when called after `stop_time` with nothing left to claim.

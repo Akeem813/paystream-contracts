@@ -147,7 +147,7 @@ The `cargo-cache` volume persists the Cargo registry between runs so subsequent 
 ```
 Active → Paused → Active
 Active → Cancelled
-Active → Exhausted  (deposit fully streamed)
+Active → Exhausted  (deposit fully streamed, or stop_time passed — via withdraw or settle_stream)
 ```
 
 ### Claimable Calculation
