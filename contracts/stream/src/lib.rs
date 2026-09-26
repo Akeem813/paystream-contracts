@@ -23,9 +23,11 @@ use storage::{
     save_stream, set_admin, set_min_deposit, set_pending_admin, set_pending_admin_nonce,
 };
 use types::{
-    DataKey, Stream, StreamParams, StreamStatus, ERR_BAD_PENDING_NONCE, ERR_NO_PENDING_ADMIN,
-    ERR_NOT_PENDING_ADMIN, ERR_REENTRANT, ERR_STREAM_CANCELLED, ERR_STREAM_EXHAUSTED,
-    ERR_ZERO_DEPOSIT,
+    DataKey, Stream, StreamParams, StreamStatus, ERR_ADMIN_NOT_SET, ERR_BAD_PENDING_NONCE,
+    ERR_CONTRACT_PAUSED, ERR_EMPTY_PARAMS, ERR_NOT_ADMIN, ERR_NOT_EMPLOYEE, ERR_NOT_EMPLOYER,
+    ERR_NOT_PENDING_ADMIN, ERR_NO_PENDING_ADMIN, ERR_OVERFLOW, ERR_REENTRANT,
+    ERR_STREAM_ALREADY_ENDED, ERR_STREAM_CANCELLED, ERR_STREAM_EXHAUSTED, ERR_STREAM_NOT_ACTIVE,
+    ERR_STREAM_NOT_FOUND, ERR_STREAM_NOT_PAUSED, ERR_ZERO_DEPOSIT,
 };
 use validate::{validate_create_stream, validate_rate, validate_top_up};
 
@@ -648,8 +650,6 @@ impl StreamContract {
         events::stream_cancelled(
             &env,
             stream_id,
-            &employer,
-            &stream.employee,
             claimable,
             refund,
         );
@@ -941,6 +941,14 @@ impl StreamContract {
     /// `Vec<u64>` of stream IDs; empty if the address receives no streams.
     pub fn streams_by_employee(env: Env, employee: Address) -> Vec<u64> {
         get_employee_streams(&env, &employee)
+    }
+
+    /// Return whether the contract is currently paused.
+    ///
+    /// # Returns
+    /// `true` if the contract is paused, `false` otherwise.
+    pub fn is_paused(env: Env) -> bool {
+        get_paused(&env)
     }
 
     /// Return the number of streams owned by `employer`.

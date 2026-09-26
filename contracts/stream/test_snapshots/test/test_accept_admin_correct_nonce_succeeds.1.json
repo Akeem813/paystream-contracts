@@ -1,6 +1,6 @@
 {
   "generators": {
-    "address": 4,
+    "address": 3,
     "nonce": 0
   },
   "auth": [
@@ -24,6 +24,7 @@
         }
       ]
     ],
+    [],
     [
       [
         "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
@@ -46,6 +47,7 @@
         }
       ]
     ],
+    [],
     [
       [
         "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
@@ -75,13 +77,19 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "function_name": "propose_admin",
+              "function_name": "set_min_deposit",
               "args": [
                 {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
                   "u64": 1
+                },
+                {
+                  "i128": {
+                    "hi": 0,
+                    "lo": 500
+                  }
                 }
               ]
             }
@@ -152,24 +160,15 @@
                         "key": {
                           "vec": [
                             {
-                              "symbol": "PendingAdmin"
+                              "symbol": "MinDeposit"
                             }
                           ]
                         },
                         "val": {
-                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                        }
-                      },
-                      {
-                        "key": {
-                          "vec": [
-                            {
-                              "symbol": "PendingAdminNonce"
-                            }
-                          ]
-                        },
-                        "val": {
-                          "u64": 1
+                          "i128": {
+                            "hi": 0,
+                            "lo": 500
+                          }
                         }
                       }
                     ]
