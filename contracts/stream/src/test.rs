@@ -1130,3 +1130,32 @@ fn test_is_paused_reflects_pause_unpause() {
     client.unpause_contract(&1);
     assert!(!client.is_paused());
 }
+
+// ---------------------------------------------------------------------------
+// SC-13 – top_up overflow protection
+// ---------------------------------------------------------------------------
+
+#[test]
+#[should_panic(expected = "E004")]
+fn test_top_up_deposit_overflow_uses_err_overflow() {
+    use crate::storage::save_stream;
+
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &1, &0);
+
+    // Force deposit to i128::MAX so adding any positive amount overflows.
+    env.as_contract(&client.address, || {
+        let mut stream = crate::storage::load_stream(&env, id).unwrap();
+        stream.deposit = i128::MAX;
+        save_stream(&env, &stream);
+    });
+
+    // top_up with 1 should panic with E004, not a generic "deposit overflow" message.
+    client.top_up(&employer, &id, &1);
+}

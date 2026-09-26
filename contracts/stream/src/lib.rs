@@ -403,7 +403,7 @@ impl StreamContract {
         stream.deposit = stream
             .deposit
             .checked_add(amount)
-            .expect("deposit overflow");
+            .expect(ERR_OVERFLOW);
         save_stream(&env, &stream);
         events::topped_up(&env, stream_id, &employer, amount);
     }
