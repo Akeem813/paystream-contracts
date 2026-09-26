@@ -11,6 +11,11 @@ mod validate;
 mod test;
 
 use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Vec};
+
+/// Compile-time contract version.  Increment this constant with every
+/// WASM upgrade so that `migrate` stamps the new version into instance
+/// storage and `version()` can be queried off-chain.
+pub const CONTRACT_VERSION: u32 = 1;
 use storage::{
     claimable_amount, clear_pending_admin, consume_admin_nonce, get_admin, get_admin_nonce,
     get_employee_streams, get_employer_streams, get_min_deposit, get_pending_admin,
@@ -613,7 +618,9 @@ impl StreamContract {
     /// No-op migration hook called by the admin after an upgrade.
     ///
     /// Confirms the new WASM is operational and the admin key is still valid.
-    /// Future upgrades may add state migration logic here.
+    /// Also writes the compile-time [`CONTRACT_VERSION`] constant into instance
+    /// storage so that `version()` can be queried off-chain for upgrade
+    /// verification and version-gated feature flags.
     ///
     /// # Parameters
     /// - `admin` — must match the stored admin (requires auth)
@@ -628,6 +635,25 @@ impl StreamContract {
             .get(&DataKey::Admin)
             .expect("admin not set");
         assert_eq!(admin, stored_admin, "not the admin");
+        env.storage()
+            .instance()
+            .set(&DataKey::Version, &CONTRACT_VERSION);
+    }
+
+    /// Return the contract version stored by the last `migrate` call.
+    ///
+    /// Returns `0` if `migrate` has never been called (pre-upgrade state).
+    /// After the initial `migrate` call this will return `1`, and subsequent
+    /// upgrades should increment [`CONTRACT_VERSION`] so callers can detect
+    /// which WASM revision is running.
+    ///
+    /// # Returns
+    /// Version as `u32`.
+    pub fn version(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&DataKey::Version)
+            .unwrap_or(0)
     }
 
     /// Return the total number of streams ever created.

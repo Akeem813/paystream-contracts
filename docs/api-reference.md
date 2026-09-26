@@ -587,7 +587,7 @@ Admin upgrades the contract WASM in-place.
 
 ### `migrate`
 
-No-op migration hook called by the admin after an upgrade to confirm the new WASM is operational.
+Migration hook called by the admin after an upgrade to confirm the new WASM is operational. Also writes the compile-time `CONTRACT_VERSION` constant (`1` as of the current release) into instance storage so that `version()` can be queried off-chain.
 
 **Caller:** Admin
 
@@ -596,6 +596,31 @@ No-op migration hook called by the admin after an upgrade to confirm the new WAS
 | `admin` | `Address` | Must match the stored admin |
 
 **Returns:** nothing
+
+**Side effects:**
+- Writes `CONTRACT_VERSION` to `DataKey::Version` in instance storage.
+
+**Example:**
+```bash
+stellar contract invoke --id <STREAM_ID> --source <ADMIN_KEY> --network testnet \
+  -- migrate --admin <ADMIN_ADDRESS>
+```
+
+---
+
+### `version`
+
+Return the contract version stored by the last `migrate` call. Returns `0` if `migrate` has never been called (pre-upgrade / initial deployment state).
+
+**Caller:** Anyone
+
+**Returns:** `u32` — current contract version (1 after the first `migrate`)
+
+**Example:**
+```bash
+stellar contract invoke --id <STREAM_ID> --source <ANY_KEY> --network testnet \
+  -- version
+```
 
 ---
 

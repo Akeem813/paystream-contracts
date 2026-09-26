@@ -67,6 +67,8 @@ pub enum DataKey {
     EmployerStreams(Address),
     /// Index: employee address → Vec<u64> of stream IDs paying them.
     EmployeeStreams(Address),
+    /// Contract version written by migrate() for off-chain upgrade verification.
+    Version,
 }
 
 /// Contract error codes – panic messages reference these names so callers can
