@@ -63,10 +63,15 @@ pub enum DataKey {
     Paused,
     /// Pending admin for two-step admin transfer.
     PendingAdmin,
+    /// Nonce bound to the pending admin proposal (front-running protection).
+    /// Cleared together with PendingAdmin when accept_admin completes.
+    PendingAdminNonce,
     /// Index: employer address → Vec<u64> of stream IDs they own.
     EmployerStreams(Address),
     /// Index: employee address → Vec<u64> of stream IDs paying them.
     EmployeeStreams(Address),
+    /// Contract version written by migrate() for off-chain upgrade verification.
+    Version,
 }
 
 /// Contract error codes – panic messages reference these names so callers can
@@ -87,3 +92,6 @@ pub const ERR_STREAM_EXHAUSTED: &str = "E006: cannot top up an exhausted stream"
 pub const ERR_BELOW_MIN_DEPOSIT: &str = "E007: deposit below minimum";
 pub const ERR_INVALID_RATE: &str = "E008: rate_per_second exceeds maximum";
 pub const ERR_BAD_NONCE: &str = "E009: invalid admin nonce";
+pub const ERR_NO_PENDING_ADMIN: &str = "E010: no pending admin set";
+pub const ERR_NOT_PENDING_ADMIN: &str = "E011: not the pending admin";
+pub const ERR_BAD_PENDING_NONCE: &str = "E024: invalid pending admin nonce";
