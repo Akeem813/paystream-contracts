@@ -574,6 +574,46 @@ stellar contract invoke --id <STREAM_ID> --source <ANY_KEY> --network testnet \
 
 ---
 
+### `stream_count_by_employer`
+
+Return the number of streams owned by an employer. Equivalent to `streams_by_employer(employer).len()` but avoids loading the full ID vector — useful for pagination and dashboards.
+
+**Caller:** Anyone
+
+| Parameter | Type | Description |
+|---|---|---|
+| `employer` | `Address` | Employer address to query |
+
+**Returns:** `u64` — stream count; 0 if the address has no streams
+
+**Example:**
+```bash
+stellar contract invoke --id <STREAM_ID> --source <ANY_KEY> --network testnet \
+  -- stream_count_by_employer --employer <EMPLOYER_ADDRESS>
+```
+
+---
+
+### `stream_count_by_employee`
+
+Return the number of streams paying an employee. Equivalent to `streams_by_employee(employee).len()` but avoids loading the full ID vector — useful for pagination and dashboards.
+
+**Caller:** Anyone
+
+| Parameter | Type | Description |
+|---|---|---|
+| `employee` | `Address` | Employee address to query |
+
+**Returns:** `u64` — stream count; 0 if the address has no streams
+
+**Example:**
+```bash
+stellar contract invoke --id <STREAM_ID> --source <ANY_KEY> --network testnet \
+  -- stream_count_by_employee --employee <EMPLOYEE_ADDRESS>
+```
+
+---
+
 ### `admin_nonce`
 
 Return the current admin nonce. Use this to build the next admin transaction.

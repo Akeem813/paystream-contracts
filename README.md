@@ -128,6 +128,8 @@ The `cargo-cache` volume persists the Cargo registry between runs so subsequent 
 | `get_stream(stream_id)` | Anyone | Read stream state |
 | `claimable(stream_id)` | Anyone | Query withdrawable amount right now |
 | `stream_count()` | Anyone | Total streams created |
+| `stream_count_by_employer(employer)` | Anyone | Number of streams owned by an employer |
+| `stream_count_by_employee(employee)` | Anyone | Number of streams paying an employee |
 
 ### Batch vs Individual Stream Creation — Fee Comparison
 

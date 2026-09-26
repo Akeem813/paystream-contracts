@@ -803,4 +803,32 @@ impl StreamContract {
     pub fn streams_by_employee(env: Env, employee: Address) -> Vec<u64> {
         get_employee_streams(&env, &employee)
     }
+
+    /// Return the number of streams owned by `employer`.
+    ///
+    /// Equivalent to `streams_by_employer(employer).len()` but avoids loading
+    /// the full ID vector — useful for pagination and dashboards.
+    ///
+    /// # Parameters
+    /// - `employer` — employer address to query
+    ///
+    /// # Returns
+    /// `u64` count; 0 if the address has no streams.
+    pub fn stream_count_by_employer(env: Env, employer: Address) -> u64 {
+        get_employer_streams(&env, &employer).len() as u64
+    }
+
+    /// Return the number of streams paying `employee`.
+    ///
+    /// Equivalent to `streams_by_employee(employee).len()` but avoids loading
+    /// the full ID vector — useful for pagination and dashboards.
+    ///
+    /// # Parameters
+    /// - `employee` — employee address to query
+    ///
+    /// # Returns
+    /// `u64` count; 0 if the address has no streams.
+    pub fn stream_count_by_employee(env: Env, employee: Address) -> u64 {
+        get_employee_streams(&env, &employee).len() as u64
+    }
 }
