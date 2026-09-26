@@ -1613,7 +1613,7 @@ fn test_cancel_streams_batch_wrong_employer_rejected() {
 
     // Give employer2 some tokens too
     let token = paystream_token::TokenContractClient::new(&env, &token_id);
-    token.mint(&employer1, &employer2, &10_000);
+    token.mint(&employer1, &employer2, &10_000, &0);
 
     client.initialize(&admin);
     // Stream owned by employer1
