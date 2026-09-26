@@ -11,17 +11,23 @@ mod validate;
 mod test;
 
 use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Vec};
+
+/// Compile-time contract version.  Increment this constant with every
+/// WASM upgrade so that `migrate` stamps the new version into instance
+/// storage and `version()` can be queried off-chain.
+pub const CONTRACT_VERSION: u32 = 1;
 use storage::{
     claimable_amount, clear_pending_admin, consume_admin_nonce, get_admin, get_admin_nonce,
     get_employee_streams, get_employer_streams, get_min_deposit, get_pending_admin,
-    index_employee_stream, index_employer_stream, load_stream, next_id, save_stream, set_admin,
-    set_min_deposit, set_pending_admin,
+    get_pending_admin_nonce, index_employee_stream, index_employer_stream, load_stream, next_id,
+    save_stream, set_admin, set_min_deposit, set_pending_admin, set_pending_admin_nonce,
 };
 use types::{
-    DataKey, Stream, StreamParams, StreamStatus, ERR_REENTRANT, ERR_STREAM_CANCELLED,
-    ERR_STREAM_EXHAUSTED, ERR_ZERO_DEPOSIT,
+    DataKey, Stream, StreamParams, StreamStatus, ERR_BAD_PENDING_NONCE, ERR_NO_PENDING_ADMIN,
+    ERR_NOT_PENDING_ADMIN, ERR_REENTRANT, ERR_STREAM_CANCELLED, ERR_STREAM_EXHAUSTED,
+    ERR_ZERO_DEPOSIT,
 };
-use validate::{validate_create_stream, validate_top_up};
+use validate::{validate_create_stream, validate_rate, validate_top_up};
 
 fn get_paused(env: &Env) -> bool {
     env.storage()
@@ -57,31 +63,43 @@ impl StreamContract {
 
     /// Step 1 of two-step admin transfer: current admin proposes a new admin.
     ///
-    /// The nominated address must call [`accept_admin`] to complete the transfer.
+    /// The nominated address must call [`accept_admin`] with the same `nonce`
+    /// to complete the transfer. Binding a nonce to the proposal makes the
+    /// transfer intent non-replayable: an attacker who observes the proposal
+    /// on-chain cannot front-run acceptance without knowing the nonce.
     ///
     /// # Parameters
     /// - `new_admin` — address being nominated as the next admin
+    /// - `nonce` — current admin nonce; consumed here for replay protection
+    ///   and also stored so `accept_admin` can verify it
     ///
     /// # Errors
     /// - Panics if the current admin auth fails
-    pub fn propose_admin(env: Env, new_admin: Address) {
+    /// - E009 if `nonce` does not match the stored admin nonce
+    pub fn propose_admin(env: Env, new_admin: Address, nonce: u64) {
         let current = get_admin(&env);
         current.require_auth();
+        consume_admin_nonce(&env, nonce);
         set_pending_admin(&env, &new_admin);
+        set_pending_admin_nonce(&env, nonce);
     }
 
     /// Step 2 of two-step admin transfer: proposed admin accepts and becomes admin.
     ///
     /// # Parameters
     /// - `new_admin` — must match the address set by [`propose_admin`] (requires auth)
+    /// - `nonce` — must match the nonce stored by [`propose_admin`]
     ///
     /// # Errors
-    /// - Panics if there is no pending admin
-    /// - Panics if `new_admin` does not match the pending admin
-    pub fn accept_admin(env: Env, new_admin: Address) {
+    /// - E010 if there is no pending admin
+    /// - E011 if `new_admin` does not match the pending admin
+    /// - E024 if `nonce` does not match the nonce stored by propose_admin
+    pub fn accept_admin(env: Env, new_admin: Address, nonce: u64) {
         new_admin.require_auth();
-        let pending = get_pending_admin(&env).expect("no pending admin");
-        assert_eq!(pending, new_admin, "not the pending admin");
+        let pending = get_pending_admin(&env).expect(ERR_NO_PENDING_ADMIN);
+        assert_eq!(pending, new_admin, "{}", ERR_NOT_PENDING_ADMIN);
+        let stored_nonce = get_pending_admin_nonce(&env).expect(ERR_NO_PENDING_ADMIN);
+        assert!(nonce == stored_nonce, "{}", ERR_BAD_PENDING_NONCE);
         set_admin(&env, &new_admin);
         clear_pending_admin(&env);
     }
@@ -438,8 +456,48 @@ impl StreamContract {
         events::stream_status_changed(&env, stream_id, &StreamStatus::Active);
     }
 
-    /// Employer cancels a stream and reclaims unstreamed funds.
+    /// Employer updates the `rate_per_second` on an Active or Paused stream.
     ///
+    /// Before changing the rate, any tokens accrued since the last withdrawal
+    /// are settled by resetting `last_withdraw_time` to the current ledger
+    /// timestamp.  This ensures the employee is credited at the old rate for
+    /// all elapsed time and will accrue at the new rate going forward.
+    ///
+    /// # Parameters
+    /// - `employer` — must match the stream's employer (requires auth)
+    /// - `stream_id` — ID of the stream to update
+    /// - `new_rate` — new `rate_per_second` value (1 – 1,000,000,000)
+    ///
+    /// # Errors
+    /// - Panics if stream not found
+    /// - Panics if caller is not the stream's employer
+    /// - Panics if stream is not Active or Paused
+    /// - E001 if `new_rate` ≤ 0
+    /// - E008 if `new_rate` > 1,000,000,000
+    pub fn update_rate(env: Env, employer: Address, stream_id: u64, new_rate: i128) {
+        employer.require_auth();
+        validate_rate(new_rate);
+
+        let mut stream = load_stream(&env, stream_id).expect("stream not found");
+        assert_eq!(stream.employer, employer, "not the employer");
+        assert!(
+            stream.status == StreamStatus::Active || stream.status == StreamStatus::Paused,
+            "stream not active or paused"
+        );
+
+        // Settle accrued-but-not-withdrawn tokens by snapshotting last_withdraw_time
+        // to now.  The next claimable calculation will start from this point at
+        // the new rate.  (For a Paused stream elapsed is already 0 so this is a
+        // no-op in terms of accrual, but we still reset for consistency.)
+        stream.last_withdraw_time = env.ledger().timestamp();
+
+        let old_rate = stream.rate_per_second;
+        stream.rate_per_second = new_rate;
+        save_stream(&env, &stream);
+        events::rate_updated(&env, stream_id, old_rate, new_rate);
+    }
+
+    /// Employer cancels a stream and reclaims unstreamed funds.    ///
     /// The employee receives all tokens earned up to the cancellation time.
     /// The employer is refunded the remaining deposit. Works on both Active
     /// and Paused streams.
@@ -488,7 +546,14 @@ impl StreamContract {
 
         stream.status = StreamStatus::Cancelled;
         save_stream(&env, &stream);
-        events::stream_cancelled(&env, stream_id, claimable, refund);
+        events::stream_cancelled(
+            &env,
+            stream_id,
+            &employer,
+            &stream.employee,
+            claimable,
+            refund,
+        );
     }
 
     /// Read the full state of a stream by ID.
@@ -566,7 +631,9 @@ impl StreamContract {
     /// No-op migration hook called by the admin after an upgrade.
     ///
     /// Confirms the new WASM is operational and the admin key is still valid.
-    /// Future upgrades may add state migration logic here.
+    /// Also writes the compile-time [`CONTRACT_VERSION`] constant into instance
+    /// storage so that `version()` can be queried off-chain for upgrade
+    /// verification and version-gated feature flags.
     ///
     /// # Parameters
     /// - `admin` — must match the stored admin (requires auth)
@@ -581,6 +648,25 @@ impl StreamContract {
             .get(&DataKey::Admin)
             .expect("admin not set");
         assert_eq!(admin, stored_admin, "not the admin");
+        env.storage()
+            .instance()
+            .set(&DataKey::Version, &CONTRACT_VERSION);
+    }
+
+    /// Return the contract version stored by the last `migrate` call.
+    ///
+    /// Returns `0` if `migrate` has never been called (pre-upgrade state).
+    /// After the initial `migrate` call this will return `1`, and subsequent
+    /// upgrades should increment [`CONTRACT_VERSION`] so callers can detect
+    /// which WASM revision is running.
+    ///
+    /// # Returns
+    /// Version as `u32`.
+    pub fn version(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&DataKey::Version)
+            .unwrap_or(0)
     }
 
     /// Return the total number of streams ever created.

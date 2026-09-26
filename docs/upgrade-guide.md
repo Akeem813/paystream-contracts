@@ -62,3 +62,16 @@ Soroban's upgrade replaces only the WASM bytecode. All `persistent` and `instanc
 - Only the contract admin can call `upgrade` and `migrate`
 - The admin address is stored in instance storage under `DataKey::Admin`
 - Soroban emits a `SYSTEM` event on every upgrade containing the old and new WASM hashes, providing an on-chain audit trail
+
+## Reentrancy Re-verification (SEC-16)
+
+On each **major** Soroban SDK version bump, the reentrancy analysis must be re-verified.
+
+See the checklist in [`docs/security/reentrancy-analysis.md`](security/reentrancy-analysis.md#re-verification-checklist) for the full procedure.
+
+In summary:
+1. Read the SDK release notes for changes to the cross-contract call model.
+2. Re-inspect the `withdraw` and `cancel_stream` call graphs.
+3. Confirm `token::transfer` is still a leaf call with no callback path.
+4. Run `test_reentrant_withdraw_rejected`.
+5. Update `docs/security/reentrancy-analysis.md` with the new SDK version and review date.
