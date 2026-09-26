@@ -5,7 +5,7 @@
 mod events;
 pub mod storage;
 pub mod types;
-mod validate;
+pub mod validate;
 
 #[cfg(test)]
 mod test;
@@ -941,6 +941,60 @@ impl StreamContract {
     /// `Vec<u64>` of stream IDs; empty if the address receives no streams.
     pub fn streams_by_employee(env: Env, employee: Address) -> Vec<u64> {
         get_employee_streams(&env, &employee)
+    }
+
+    /// Return a page of stream IDs owned by `employer`.
+    ///
+    /// # Parameters
+    /// - `employer` — employer address to query
+    /// - `offset` — zero-based start index
+    /// - `limit` — maximum items to return; capped at 200
+    ///
+    /// # Returns
+    /// `Vec<u64>` of stream IDs; empty if offset exceeds index length.
+    pub fn streams_by_employer_paginated(
+        env: Env,
+        employer: Address,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<u64> {
+        let all = get_employer_streams(&env, &employer);
+        let total = all.len();
+        let capped_limit = limit.min(200);
+        let start = offset.min(total);
+        let end = (start + capped_limit).min(total);
+        let mut result: Vec<u64> = Vec::new(&env);
+        for i in start..end {
+            result.push_back(all.get(i).unwrap());
+        }
+        result
+    }
+
+    /// Return a page of stream IDs paying `employee`.
+    ///
+    /// # Parameters
+    /// - `employee` — employee address to query
+    /// - `offset` — zero-based start index
+    /// - `limit` — maximum items to return; capped at 200
+    ///
+    /// # Returns
+    /// `Vec<u64>` of stream IDs; empty if offset exceeds index length.
+    pub fn streams_by_employee_paginated(
+        env: Env,
+        employee: Address,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<u64> {
+        let all = get_employee_streams(&env, &employee);
+        let total = all.len();
+        let capped_limit = limit.min(200);
+        let start = offset.min(total);
+        let end = (start + capped_limit).min(total);
+        let mut result: Vec<u64> = Vec::new(&env);
+        for i in start..end {
+            result.push_back(all.get(i).unwrap());
+        }
+        result
     }
 
     /// Return the number of streams owned by `employer`.

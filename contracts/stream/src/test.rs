@@ -1727,3 +1727,166 @@ fn test_settle_stream_with_claimable_tokens_panics() {
     // Still has 500 claimable tokens (10/s * 50s) — must panic
     client.settle_stream(&id);
 }
+
+// ---------------------------------------------------------------------------
+// SC-25 – streams_by_employer_paginated / streams_by_employee_paginated
+// ---------------------------------------------------------------------------
+
+/// Helper: create `n` streams for a single employer, each with a unique
+/// employee.  Returns the ordered Vec of stream IDs.
+fn create_n_streams(
+    env: &Env,
+    client: &StreamContractClient,
+    employer: &Address,
+    token_id: &Address,
+    n: u32,
+) -> soroban_sdk::Vec<u64> {
+    let mut ids = soroban_sdk::Vec::new(env);
+    for _ in 0..n {
+        let employee = Address::generate(env);
+        let id = client.create_stream(employer, &employee, token_id, &1_000, &1, &0);
+        ids.push_back(id);
+    }
+    ids
+}
+
+/// Page 0 returns the first `limit` IDs.
+#[test]
+fn test_streams_by_employer_paginated_page0() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    client.set_min_deposit(&admin, &0, &100);
+
+    // Create 5 streams; first page of 3 should return IDs 1, 2, 3
+    let all_ids = create_n_streams(&env, &client, &employer, &token_id, 5);
+
+    let page = client.streams_by_employer_paginated(&employer, &0, &3);
+    assert_eq!(page.len(), 3);
+    assert_eq!(page.get(0).unwrap(), all_ids.get(0).unwrap());
+    assert_eq!(page.get(1).unwrap(), all_ids.get(1).unwrap());
+    assert_eq!(page.get(2).unwrap(), all_ids.get(2).unwrap());
+}
+
+/// Page 1 returns the next `limit` IDs.
+#[test]
+fn test_streams_by_employer_paginated_page1() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    client.set_min_deposit(&admin, &0, &100);
+
+    // Create 5 streams; second page (offset=3, limit=3) → IDs 4, 5
+    let all_ids = create_n_streams(&env, &client, &employer, &token_id, 5);
+
+    let page = client.streams_by_employer_paginated(&employer, &3, &3);
+    assert_eq!(page.len(), 2);
+    assert_eq!(page.get(0).unwrap(), all_ids.get(3).unwrap());
+    assert_eq!(page.get(1).unwrap(), all_ids.get(4).unwrap());
+}
+
+/// Last page returns only the remaining items (fewer than limit).
+#[test]
+fn test_streams_by_employer_paginated_last_page() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    client.set_min_deposit(&admin, &0, &100);
+
+    // 7 streams, page size 5 → last page at offset=5 returns 2 items
+    let all_ids = create_n_streams(&env, &client, &employer, &token_id, 7);
+
+    let page = client.streams_by_employer_paginated(&employer, &5, &5);
+    assert_eq!(page.len(), 2);
+    assert_eq!(page.get(0).unwrap(), all_ids.get(5).unwrap());
+    assert_eq!(page.get(1).unwrap(), all_ids.get(6).unwrap());
+}
+
+/// Offset beyond end returns an empty vec (no panic).
+#[test]
+fn test_streams_by_employer_paginated_offset_beyond_end() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    client.set_min_deposit(&admin, &0, &100);
+
+    // 3 streams, offset=100 → empty
+    create_n_streams(&env, &client, &employer, &token_id, 3);
+
+    let page = client.streams_by_employer_paginated(&employer, &100, &10);
+    assert_eq!(page.len(), 0);
+}
+
+/// limit > 200 is silently capped at 200.
+#[test]
+fn test_streams_by_employer_paginated_limit_capped_at_200() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    client.set_min_deposit(&admin, &0, &100);
+
+    // 5 streams; even with limit=9999 only 5 should be returned
+    create_n_streams(&env, &client, &employer, &token_id, 5);
+
+    let page = client.streams_by_employer_paginated(&employer, &0, &9999);
+    assert_eq!(page.len(), 5);
+}
+
+/// streams_by_employee_paginated — page 0.
+#[test]
+fn test_streams_by_employee_paginated_page0() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    client.set_min_deposit(&admin, &0, &100);
+
+    // Create 5 streams all paying the same employee (single employer is fine here)
+    let mut all_ids = soroban_sdk::Vec::new(&env);
+    for _ in 0..5u32 {
+        let id = client.create_stream(&employer, &employee, &token_id, &1_000, &1, &0);
+        all_ids.push_back(id);
+    }
+
+    let page = client.streams_by_employee_paginated(&employee, &0, &3);
+    assert_eq!(page.len(), 3);
+    assert_eq!(page.get(0).unwrap(), all_ids.get(0).unwrap());
+    assert_eq!(page.get(1).unwrap(), all_ids.get(1).unwrap());
+    assert_eq!(page.get(2).unwrap(), all_ids.get(2).unwrap());
+}
+
+/// streams_by_employee_paginated — offset beyond end returns empty.
+#[test]
+fn test_streams_by_employee_paginated_offset_beyond_end() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    client.set_min_deposit(&admin, &0, &100);
+
+    client.create_stream(&employer, &employee, &token_id, &1_000, &1, &0);
+
+    let page = client.streams_by_employee_paginated(&employee, &999, &10);
+    assert_eq!(page.len(), 0);
+}
