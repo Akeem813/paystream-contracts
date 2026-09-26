@@ -120,13 +120,18 @@ The `cargo-cache` volume persists the Cargo registry between runs so subsequent 
 | `create_stream(employer, employee, token, deposit, rate_per_second, stop_time)` | Employer | Create stream, lock deposit |
 | `create_streams_batch(employer, params)` | Employer | Create multiple streams atomically; all succeed or all revert |
 | `withdraw(employee, stream_id)` | Employee | Withdraw all claimable earnings |
+| `withdraw_all(employee)` | Employee | Withdraw from all streams in one transaction |
 | `top_up(employer, stream_id, amount)` | Employer | Add more funds to active stream |
 | `pause_stream(employer, stream_id)` | Employer | Pause accrual |
 | `resume_stream(employer, stream_id)` | Employer | Resume accrual |
 | `cancel_stream(employer, stream_id)` | Employer | Pay employee earned share, refund remainder |
+| `cancel_streams_batch(employer, stream_ids)` | Employer | Cancel multiple streams atomically; all succeed or all revert |
 | `get_stream(stream_id)` | Anyone | Read stream state |
+| `stream_status(stream_id)` | Anyone | Query stream status only (lightweight) |
 | `claimable(stream_id)` | Anyone | Query withdrawable amount right now |
 | `stream_count()` | Anyone | Total streams created |
+| `stream_count_by_employer(employer)` | Anyone | Number of streams owned by an employer |
+| `stream_count_by_employee(employee)` | Anyone | Number of streams paying an employee |
 
 ### Batch vs Individual Stream Creation — Fee Comparison
 
@@ -191,9 +196,13 @@ make deploy-local
 
 ---
 
-## Contributing
+## Contributing & Bounties
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+We welcome contributions from the community.
+
+- **Developer Setup & Guidelines**: Review [CONTRIBUTING.md](CONTRIBUTING.md) for environment setup, coding standards, and PR workflows.
+- **Bounty Program**: PayStream maintains an active bounty track for open-source contributors across smart contracts, testing, security, and tooling. See [docs/bounties.md](docs/bounties.md) for open bounties, criteria, and entry-level tasks tagged with `good-first-issue`.
+- **First-Time Contributors**: Browse open beginner-friendly tasks in the [Good First Issues Tracker](https://github.com/veracindarella/paystream-contracts/issues?q=is%3Aissue+is%3Aopen+label%3Agood-first-issue).
 
 ## Security
 

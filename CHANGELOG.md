@@ -9,11 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- SC-02: `settle_stream(stream_id)` — callable by anyone; transitions an Active stream to
-  Exhausted when `stop_time > 0 && now >= stop_time && claimable == 0`. Fixes off-chain
-  indexers that rely on `status == Active` as a proxy for "has remaining value".
-- SC-02: `withdraw` now also performs the Active→Exhausted transition when it returns 0
-  and `stop_time` has been passed, so indexers are updated on the next employee interaction.
+- SC-06: `stream_status(stream_id) -> StreamStatus` — lightweight view that returns only
+  the stream status without loading the full `Stream` struct into the caller's response.
+  Reduces resource consumption for read-heavy off-chain indexers polling many streams.
 
 ## [0.1.0] - 2026-04-24
 
