@@ -997,3 +997,76 @@ fn test_streams_by_employer_load_100() {
     // 64 KiB / 8 bytes = 8,192 streams per employer. Recommend adding a test at 8,000+
     // streams if large-scale employers are expected in production.
 }
+
+// ---------------------------------------------------------------------------
+// SC-22 – cancel_stream event includes claimable and refund amounts
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_cancel_stream_event_contains_amounts() {
+    use soroban_sdk::testutils::Events as _;
+    use soroban_sdk::{symbol_short, vec, IntoVal};
+
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    // deposit=10_000, rate=10/s; after 100s → claimable=1_000, refund=9_000
+    let id = client.create_stream(&employer, &employee, &token_id, &10_000, &10, &0);
+
+    env.ledger().with_mut(|l| l.timestamp += 100);
+    client.cancel_stream(&employer, &id);
+
+    let events = env.events().all();
+    let cancelled_event = events.iter().find(|(_, topics, _)| {
+        *topics
+            == vec![
+                &env,
+                symbol_short!("cancelled").into_val(&env),
+                id.into_val(&env),
+            ]
+    });
+
+    assert!(cancelled_event.is_some(), "cancelled event not emitted");
+    let (_, _, data) = cancelled_event.unwrap();
+    let (claimable, refund): (i128, i128) = data.into_val(&env);
+    assert_eq!(claimable, 1_000);
+    assert_eq!(refund, 9_000);
+}
+
+#[test]
+fn test_cancel_stream_paused_zero_claimable_full_refund_event() {
+    use soroban_sdk::testutils::Events as _;
+    use soroban_sdk::{symbol_short, vec, IntoVal};
+
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let employer = Address::generate(&env);
+    let employee = Address::generate(&env);
+    let token_id = setup_token(&env, &employer);
+
+    client.initialize(&admin);
+    // Immediately pause and cancel — 0 seconds elapsed, so claimable=0, refund=full deposit.
+    let id = client.create_stream(&employer, &employee, &token_id, &5_000, &10, &0);
+    client.pause_stream(&employer, &id);
+    client.cancel_stream(&employer, &id);
+
+    let events = env.events().all();
+    let cancelled_event = events.iter().find(|(_, topics, _)| {
+        *topics
+            == vec![
+                &env,
+                symbol_short!("cancelled").into_val(&env),
+                id.into_val(&env),
+            ]
+    });
+
+    assert!(cancelled_event.is_some(), "cancelled event not emitted");
+    let (_, _, data) = cancelled_event.unwrap();
+    let (claimable, refund): (i128, i128) = data.into_val(&env);
+    assert_eq!(claimable, 0);
+    assert_eq!(refund, 5_000);
+}
