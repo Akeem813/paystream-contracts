@@ -22,6 +22,7 @@ Emits a `contract_initialized` event on success so off-chain indexers can determ
 
 **Errors:**
 - Panics if `admin` auth fails
+- Panics with "already initialized" if called more than once (SC-01 / LOW-02)
 
 **Example:**
 ```bash

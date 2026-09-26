@@ -807,6 +807,22 @@ fn test_upgrade_non_admin_rejected() {
 }
 
 // ---------------------------------------------------------------------------
+// SC-01 – Guard initialize against re-initialization (LOW-02)
+// ---------------------------------------------------------------------------
+
+/// Calling initialize a second time must panic with "already initialized".
+#[test]
+#[should_panic(expected = "already initialized")]
+fn test_initialize_cannot_be_called_twice() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+
+    client.initialize(&admin); // first call — OK
+    client.initialize(&new_admin); // second call — must panic
+}
+
+// ---------------------------------------------------------------------------
 // Issue #19 – Two-step admin transfer
 // ---------------------------------------------------------------------------
 
