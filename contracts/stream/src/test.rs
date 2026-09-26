@@ -1105,3 +1105,28 @@ fn test_get_pending_admin_none_after_accept() {
     client.accept_admin(&new_admin);
     assert!(client.get_pending_admin().is_none());
 }
+
+// ---------------------------------------------------------------------------
+// SC-17 – is_paused public query
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_is_paused_returns_false_initially() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+    assert!(!client.is_paused());
+}
+
+#[test]
+fn test_is_paused_reflects_pause_unpause() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    client.pause_contract(&0);
+    assert!(client.is_paused());
+
+    client.unpause_contract(&1);
+    assert!(!client.is_paused());
+}
