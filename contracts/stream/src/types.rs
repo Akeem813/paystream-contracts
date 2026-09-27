@@ -72,15 +72,10 @@ pub enum DataKey {
     EmployeeStreams(Address),
     /// Contract version written by migrate() for off-chain upgrade verification.
     Version,
-    /// Ledger sequence number when the employer last created a stream.
-    /// Used together with CreateCountThisLedger to enforce per-ledger rate limits.
-    LastCreateLedger(Address),
-    /// Number of streams created by this employer in the current ledger.
-    /// Resets to 0 whenever the current ledger sequence differs from LastCreateLedger.
-    CreateCountThisLedger(Address),
-    /// Admin-configurable maximum number of streams an employer may create per ledger.
-    /// Default: 50.  See SEC-05 / issue #34.
-    MaxCreatesPerLedger,
+    /// Pending emergency drain proposal: stores (recipient: Address, nonce: u64).
+    /// Set by propose_emergency_drain; cleared by emergency_drain after execution.
+    /// See SEC-03 / issue #32.
+    PendingDrain,
 }
 
 /// Contract error codes – panic messages reference these names so callers can
@@ -123,5 +118,7 @@ pub const ERR_BAD_NONCE: &str = "E009: invalid admin nonce";
 pub const ERR_NO_PENDING_ADMIN: &str = "E010: no pending admin set";
 pub const ERR_NOT_PENDING_ADMIN: &str = "E011: not the pending admin";
 pub const ERR_BAD_PENDING_NONCE: &str = "E024: invalid pending admin nonce";
-/// E025: per-employer, per-ledger stream creation rate limit exceeded (SEC-05 / #34).
-pub const ERR_RATE_LIMIT_EXCEEDED: &str = "E025: stream creation rate limit exceeded for this ledger";
+/// E026: emergency_drain requires the contract to be hard-paused first (SEC-03 / #32).
+pub const ERR_DRAIN_NOT_PAUSED: &str = "E026: contract must be paused before emergency drain";
+/// E027: no pending emergency drain proposal exists (SEC-03 / #32).
+pub const ERR_NO_PENDING_DRAIN: &str = "E027: no pending emergency drain proposal";
