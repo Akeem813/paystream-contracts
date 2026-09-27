@@ -3,6 +3,11 @@
 use crate::types::StreamStatus;
 use soroban_sdk::{symbol_short, Address, Env};
 
+pub fn contract_initialized(env: &Env, admin: &Address) {
+    env.events()
+        .publish((symbol_short!("init"),), admin.clone());
+}
+
 pub fn stream_created(env: &Env, id: u64, employer: &Address, employee: &Address, rate: i128) {
     env.events().publish(
         (symbol_short!("created"), id),
