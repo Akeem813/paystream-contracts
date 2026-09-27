@@ -127,6 +127,7 @@ PayStream streams salary from an employer to an employee in real-time on the Ste
 | Overflow protection | Pre-existing | `checked_mul` / `checked_add` throughout; `saturating_sub` for elapsed time |
 | Auth enforcement | Pre-existing | `require_auth()` on every state-mutating entry point |
 | On-chain event log | Pre-existing | All state changes emit events for auditability |
+| Emergency drain (planned) | #32 (SEC-03) | `propose_emergency_drain` + `emergency_drain` two-step; requires contract paused; see `docs/security/emergency-drain.md` |
 
 ---
 
