@@ -372,6 +372,8 @@ Any change to `withdraw`, `cancel_stream`, token transfer logic, or the reentran
 
 ## Glossary
 
+See [docs/glossary.md](docs/glossary.md) for the full glossary of Soroban and PayStream terms.
+
 | Term | Meaning |
 |---|---|
 | Stream | A salary stream from employer to employee |

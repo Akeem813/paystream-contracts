@@ -21,6 +21,48 @@ PayStream lets employers stream salaries to employees in real-time, per-second. 
 
 ---
 
+## Architecture
+
+Solid arrows are contract calls made by each actor; dashed arrows are token transfers.
+
+```mermaid
+flowchart LR
+    Admin([Admin])
+    Employer([Employer])
+    Employee([Employee])
+    SC[StreamContract]
+    TC[TokenContract<br/>SEP-41 / SAC]
+
+    Admin -->|"initialize, propose_admin / accept_admin,<br/>pause_contract / unpause_contract,<br/>set_min_deposit, upgrade, migrate"| SC
+    Employer -->|"create_stream, create_streams_batch, top_up,<br/>pause_stream, resume_stream, update_rate,<br/>cancel_stream, cancel_streams_batch"| SC
+    Employee -->|"withdraw, withdraw_all"| SC
+    SC -->|"transfer"| TC
+
+    Employer -.->|"deposit / top-up"| SC
+    SC -.->|"earned salary<br/>(withdraw, cancel)"| Employee
+    SC -.->|"unearned refund (cancel)"| Employer
+```
+
+Anyone can call the read-only functions (`get_stream`, `claimable`, `stream_status`, …) and `settle_stream`.
+
+### Stream Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Active: create_stream
+    Active --> Paused: pause_stream
+    Paused --> Active: resume_stream
+    Active --> Cancelled: cancel_stream
+    Paused --> Cancelled: cancel_stream
+    Active --> Exhausted: withdraw / settle_stream (deposit fully paid or stop_time passed)
+    Cancelled --> [*]
+    Exhausted --> [*]
+```
+
+See the [glossary](docs/glossary.md) for terms and the [client guide](docs/client-guide.md) for JavaScript integration examples.
+
+---
+
 ## Project Structure
 
 ```
