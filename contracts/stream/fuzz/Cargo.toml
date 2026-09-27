@@ -16,3 +16,7 @@ path = "src/fuzz_claimable.rs"
 [[bin]]
 name = "fuzz_withdraw"
 path = "src/fuzz_withdraw.rs"
+
+[[bin]]
+name = "fuzz_create_stream"
+path = "src/fuzz_create_stream.rs"
