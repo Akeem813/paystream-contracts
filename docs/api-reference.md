@@ -838,13 +838,38 @@ Approve a spender to transfer tokens on behalf of the owner.
 | `owner` | `Address` | Token owner |
 | `spender` | `Address` | Address being approved |
 | `amount` | `i128` | Allowance amount |
+| `expiration_ledger` | `u32` | Last ledger sequence at which the allowance is valid |
 
 **Returns:** nothing
+
+**Errors:**
+- Panics if `amount` > 0 and `expiration_ledger` is before the current ledger
 
 **Example:**
 ```bash
 stellar contract invoke --id <TOKEN_ID> --source <OWNER_KEY> --network testnet \
-  -- approve --owner <OWNER_ADDRESS> --spender <SPENDER_ADDRESS> --amount 5000
+  -- approve --owner <OWNER_ADDRESS> --spender <SPENDER_ADDRESS> --amount 5000 --expiration_ledger 1000000
+```
+
+---
+
+### `allowance`
+
+Return the allowance granted by `owner` to `spender`.
+
+**Caller:** Anyone
+
+| Parameter | Type | Description |
+|---|---|---|
+| `owner` | `Address` | Token owner |
+| `spender` | `Address` | Approved spender |
+
+**Returns:** `(i128, u32)` — `(amount, expiration_ledger)`; `(0, 0)` if none
+
+**Example:**
+```bash
+stellar contract invoke --id <TOKEN_ID> --source <ANY_KEY> --network testnet \
+  -- allowance --owner <OWNER_ADDRESS> --spender <SPENDER_ADDRESS>
 ```
 
 ---
@@ -865,8 +890,10 @@ Transfer tokens on behalf of `from` using an existing allowance.
 **Returns:** nothing
 
 **Errors:**
+- Panics if the allowance has expired
 - Panics if allowance is insufficient
 - Panics if `from` has insufficient balance
+- T001 if the recipient balance would overflow
 
 **Example:**
 ```bash
@@ -887,17 +914,80 @@ Admin mints new tokens to an address, increasing total supply.
 | `admin` | `Address` | Must match the stored admin |
 | `to` | `Address` | Recipient of minted tokens |
 | `amount` | `i128` | Amount to mint (must be > 0) |
+| `nonce` | `u64` | Current admin nonce (see `admin_nonce`); consumed on success |
 
 **Returns:** nothing
 
 **Errors:**
 - Panics if caller is not the admin
+- Panics if `nonce` does not match the stored admin nonce
 - Panics if `amount` ≤ 0
+- T001 if the recipient balance or total supply would overflow
 
 **Example:**
 ```bash
 stellar contract invoke --id <TOKEN_ID> --source <ADMIN_KEY> --network testnet \
-  -- mint --admin <ADMIN_ADDRESS> --to <RECIPIENT_ADDRESS> --amount 1000000
+  -- mint --admin <ADMIN_ADDRESS> --to <RECIPIENT_ADDRESS> --amount 1000000 --nonce 0
+```
+
+---
+
+### `admin_nonce`
+
+Return the admin nonce that the next `mint` call must supply.
+
+**Caller:** Anyone
+
+**Returns:** `u64`
+
+**Example:**
+```bash
+stellar contract invoke --id <TOKEN_ID> --source <ANY_KEY> --network testnet \
+  -- admin_nonce
+```
+
+---
+
+### `propose_admin`
+
+Step 1 of two-step admin transfer: the current admin nominates a new admin.
+
+**Caller:** Admin
+
+| Parameter | Type | Description |
+|---|---|---|
+| `new_admin` | `Address` | Address nominated as the next admin |
+
+**Returns:** nothing
+
+**Example:**
+```bash
+stellar contract invoke --id <TOKEN_ID> --source <ADMIN_KEY> --network testnet \
+  -- propose_admin --new_admin <NEW_ADMIN_ADDRESS>
+```
+
+---
+
+### `accept_admin`
+
+Step 2 of two-step admin transfer: the nominated address accepts and becomes admin.
+
+**Caller:** `new_admin` (requires auth)
+
+| Parameter | Type | Description |
+|---|---|---|
+| `new_admin` | `Address` | Must match the pending admin |
+
+**Returns:** nothing
+
+**Errors:**
+- Panics if there is no pending admin
+- Panics if `new_admin` does not match the pending admin
+
+**Example:**
+```bash
+stellar contract invoke --id <TOKEN_ID> --source <NEW_ADMIN_KEY> --network testnet \
+  -- accept_admin --new_admin <NEW_ADMIN_ADDRESS>
 ```
 
 ---
@@ -943,6 +1033,7 @@ Burn tokens on behalf of `from` using an existing allowance.
 
 **Errors:**
 - Panics if `amount` ≤ 0
+- Panics if the allowance has expired
 - Panics if allowance is insufficient
 - Panics if `from` has insufficient balance
 
@@ -1003,6 +1094,7 @@ Emitted by `update_rate` when the employer changes the stream's `rate_per_second
 | E007 | `ERR_BELOW_MIN_DEPOSIT` | Deposit below minimum |
 | E008 | `ERR_INVALID_RATE` | `rate_per_second` exceeds maximum (1,000,000,000) |
 | E009 | `ERR_BAD_NONCE` | Invalid admin nonce |
+| T001 | `ERR_OVERFLOW` (token) | Token arithmetic overflow |
 
 ---
 

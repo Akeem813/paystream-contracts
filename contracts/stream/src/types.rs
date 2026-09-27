@@ -72,8 +72,10 @@ pub enum DataKey {
     EmployeeStreams(Address),
     /// Contract version written by migrate() for off-chain upgrade verification.
     Version,
-    /// Pending upgrade: stores (wasm_hash, unlock_timestamp).
-    PendingUpgrade,
+    /// Pending emergency drain proposal: stores (recipient: Address, nonce: u64).
+    /// Set by propose_emergency_drain; cleared by emergency_drain after execution.
+    /// See SEC-03 / issue #32.
+    PendingDrain,
 }
 
 /// Contract error codes – panic messages reference these names so callers can
@@ -115,14 +117,20 @@ pub const ERR_INVALID_RATE: &str = "E008: rate_per_second exceeds maximum";
 pub const ERR_BAD_NONCE: &str = "E009: invalid admin nonce";
 pub const ERR_NO_PENDING_ADMIN: &str = "E010: no pending admin set";
 pub const ERR_NOT_PENDING_ADMIN: &str = "E011: not the pending admin";
+pub const ERR_NOT_ADMIN: &str = "E012: caller is not the contract admin";
+pub const ERR_CONTRACT_PAUSED: &str = "E013: contract is paused";
+pub const ERR_EMPTY_PARAMS: &str = "E014: batch params list must not be empty";
+pub const ERR_STREAM_NOT_FOUND: &str = "E015: stream not found";
+pub const ERR_NOT_EMPLOYEE: &str = "E016: caller is not the stream employee";
+pub const ERR_STREAM_NOT_ACTIVE: &str = "E017: stream is not active";
+pub const ERR_NOT_EMPLOYER: &str = "E018: caller is not the stream employer";
+pub const ERR_STREAM_NOT_PAUSED: &str = "E019: stream is not paused";
+pub const ERR_STREAM_ALREADY_ENDED: &str = "E020: stream already ended";
+pub const ERR_ADMIN_NOT_SET: &str = "E021: admin has not been initialised";
+pub const ERR_STOP_TIME_PAST: &str = "E022: stop_time must be in the future";
+pub const ERR_AMOUNT_NOT_POSITIVE: &str = "E023: amount must be positive";
 pub const ERR_BAD_PENDING_NONCE: &str = "E024: invalid pending admin nonce";
-pub const ERR_NO_PENDING_UPGRADE: &str = "E025: no pending upgrade";
-pub const ERR_UPGRADE_TIMELOCK_ACTIVE: &str = "E026: upgrade timelock not yet expired";
-
-/// Pending upgrade record stored during the time-lock window.
-#[contracttype]
-#[derive(Clone, Debug)]
-pub struct PendingUpgrade {
-    pub wasm_hash: soroban_sdk::BytesN<32>,
-    pub unlock_time: u64,
-}
+/// E026: emergency_drain requires the contract to be hard-paused first (SEC-03 / #32).
+pub const ERR_DRAIN_NOT_PAUSED: &str = "E026: contract must be paused before emergency drain";
+/// E027: no pending emergency drain proposal exists (SEC-03 / #32).
+pub const ERR_NO_PENDING_DRAIN: &str = "E027: no pending emergency drain proposal";
