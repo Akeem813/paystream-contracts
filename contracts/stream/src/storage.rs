@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::types::{DataKey, Stream, StreamStatus, ERR_ADMIN_NOT_SET, ERR_BAD_NONCE, ERR_OVERFLOW};
-use soroban_sdk::{Address, Env, Vec};
+use crate::types::{
+    DataKey, PendingUpgrade, Stream, StreamStatus, ERR_ADMIN_NOT_SET, ERR_BAD_NONCE, ERR_OVERFLOW,
+};
+use soroban_sdk::{Address, BytesN, Env, Vec};
+
+/// Minimum delay (in seconds) between proposing and executing an upgrade.
+/// Default: 172 800 s = 48 hours.
+pub const TIMELOCK_DELAY: u64 = 172_800;
 
 /// Default minimum deposit (10_000 stroops = 0.001 XLM equivalent).
 pub const DEFAULT_MIN_DEPOSIT: i128 = 10_000;
@@ -203,4 +209,25 @@ pub fn consume_admin_nonce(env: &Env, nonce: u64) {
     env.storage()
         .instance()
         .set(&DataKey::AdminNonce, &(expected + 1));
+}
+
+// ---------------------------------------------------------------------------
+// Upgrade time-lock helpers (SEC-02)
+// ---------------------------------------------------------------------------
+
+/// Store a pending upgrade record.
+pub fn set_pending_upgrade(env: &Env, upgrade: &PendingUpgrade) {
+    env.storage()
+        .instance()
+        .set(&DataKey::PendingUpgrade, upgrade);
+}
+
+/// Retrieve the pending upgrade record, if any.
+pub fn get_pending_upgrade(env: &Env) -> Option<PendingUpgrade> {
+    env.storage().instance().get(&DataKey::PendingUpgrade)
+}
+
+/// Remove the pending upgrade record.
+pub fn clear_pending_upgrade(env: &Env) {
+    env.storage().instance().remove(&DataKey::PendingUpgrade);
 }
