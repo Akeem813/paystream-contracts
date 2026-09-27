@@ -50,6 +50,10 @@ pub fn set_total_supply(env: &Env, supply: i128) {
         .set(&TokenDataKey::TotalSupply, &supply);
 }
 
+pub fn has_admin(env: &Env) -> bool {
+    env.storage().instance().has(&TokenDataKey::Admin)
+}
+
 pub fn get_admin(env: &Env) -> Address {
     env.storage()
         .instance()

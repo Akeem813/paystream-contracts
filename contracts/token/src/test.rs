@@ -24,6 +24,16 @@ fn test_initialize() {
 }
 
 #[test]
+#[should_panic(expected = "already initialized")]
+fn test_initialize_cannot_be_called_twice() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    client.initialize(&admin, &1_000_000);
+    // Second call must panic with "already initialized"
+    client.initialize(&admin, &500_000);
+}
+
+#[test]
 fn test_transfer() {
     let (env, client) = setup();
     let admin = Address::generate(&env);

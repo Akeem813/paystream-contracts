@@ -33,9 +33,11 @@ impl TokenContract {
     /// - `initial_supply` — tokens minted to `admin` on initialisation
     ///
     /// # Errors
+    /// - Panics if the contract has already been initialised ("already initialized")
     /// - Panics if `admin` auth fails
     pub fn initialize(env: Env, admin: Address, initial_supply: i128) {
         admin.require_auth();
+        assert!(!has_admin(&env), "already initialized");
         set_admin(&env, &admin);
         set_balance(&env, &admin, initial_supply);
         set_total_supply(&env, initial_supply);
