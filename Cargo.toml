@@ -6,6 +6,9 @@ members = [
     "contracts/stream/fuzz",
 ]
 
+[workspace.package]
+rust-version = "1.84.0"
+
 [workspace.dependencies]
 soroban-sdk = { version = "22.0.0" }
 

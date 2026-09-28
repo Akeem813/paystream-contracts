@@ -14,10 +14,10 @@ jobs:
     outputs:
       hashes: ${{ steps.hash.outputs.hashes }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           targets: wasm32-unknown-unknown
 
@@ -25,7 +25,7 @@ jobs:
         run: cargo install --locked stellar-cli --features opt
 
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cargo/registry
@@ -45,12 +45,91 @@ jobs:
           echo "hashes=$(base64 -w0 checksums.sha256)" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           files: |
             target/wasm32-unknown-unknown/release/*.wasm
             target/wasm32-unknown-unknown/release/checksums.sha256
           generate_release_notes: true
+
+      - name: Upload WASM for testnet deploy
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-wasm
+          path: target/wasm32-unknown-unknown/release/*.wasm
+
+  deploy-testnet:
+    name: Deploy to testnet
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      # Set repository variable TESTNET_DRY_RUN=true to skip deploying and committing.
+      DRY_RUN: ${{ vars.TESTNET_DRY_RUN == 'true' }}
+      HAS_SECRET: ${{ secrets.TESTNET_ADMIN_SECRET != '' }}
+      STELLAR_RPC_URL: https://soroban-testnet.stellar.org
+      STELLAR_NETWORK_PASSPHRASE: Test SDF Network ; September 2015
+    steps:
+      - name: Check deploy flag
+        id: flag
+        run: |
+          # Optional: the deploy is skipped unless TESTNET_ADMIN_SECRET is configured.
+          if [ "$HAS_SECRET" != "true" ]; then
+            echo "::notice::TESTNET_ADMIN_SECRET not set; skipping testnet deploy"
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        if: steps.flag.outputs.enabled == 'true'
+        with:
+          ref: main
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: steps.flag.outputs.enabled == 'true'
+        with:
+          name: release-wasm
+          path: target/wasm32-unknown-unknown/release
+
+      - name: Install Stellar CLI
+        if: steps.flag.outputs.enabled == 'true' && env.DRY_RUN != 'true'
+        run: cargo install --locked stellar-cli --features opt
+
+      - name: Deploy contracts
+        id: deploy
+        if: steps.flag.outputs.enabled == 'true'
+        env:
+          # Read by the Stellar CLI as the source account; never passed on the command line.
+          STELLAR_ACCOUNT: ${{ secrets.TESTNET_ADMIN_SECRET }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "Dry run: would deploy $(ls target/wasm32-unknown-unknown/release/*.wasm)"
+            exit 0
+          fi
+          deploy() {
+            stellar contract deploy --wasm "target/wasm32-unknown-unknown/release/$1"
+          }
+          echo "token=$(deploy paystream_token.wasm)" >> "$GITHUB_OUTPUT"
+          echo "stream=$(deploy paystream_stream.wasm)" >> "$GITHUB_OUTPUT"
+
+      - name: Update docs/testnet.md
+        if: steps.flag.outputs.enabled == 'true' && env.DRY_RUN != 'true'
+        env:
+          TOKEN_ID: ${{ steps.deploy.outputs.token }}
+          STREAM_ID: ${{ steps.deploy.outputs.stream }}
+        run: |
+          sed -i \
+            -e "s/^| PayStream Token | .* |$/| PayStream Token | \`$TOKEN_ID\` |/" \
+            -e "s/^| PayStream Stream | .* |$/| PayStream Stream | \`$STREAM_ID\` |/" \
+            -e "s/^Last deployed: .*/Last deployed: **$(date -u +%F)** (${GITHUB_REF_NAME})/" \
+            docs/testnet.md
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/testnet.md
+          git commit -m "docs: update testnet contract IDs for ${GITHUB_REF_NAME}"
+          git push origin HEAD:main
 
   provenance:
     name: SLSA provenance
@@ -59,6 +138,7 @@ jobs:
       actions: read
       id-token: write
       contents: write
+    # SLSA reusable workflows must be referenced by tag (not SHA) for slsa-verifier to validate provenance.
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
     with:
       base64-subjects: ${{ needs.release.outputs.hashes }}
