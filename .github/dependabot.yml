@@ -1,7 +1,15 @@
 version: 2
 updates:
-  # Keeps SHA-pinned GitHub Actions (and their version comments) up to date.
-  - package-ecosystem: github-actions
-    directory: /
+  - package-ecosystem: cargo
+    directory: "/"
     schedule:
       interval: weekly
+    assignees:
+      - veracindarella
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    assignees:
+      - veracindarella

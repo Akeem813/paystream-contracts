@@ -12,7 +12,7 @@ jobs:
     name: Soroban sandbox integration tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
@@ -20,7 +20,7 @@ jobs:
           targets: wasm32-unknown-unknown, wasm32v1-none
 
       - name: Cache cargo
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
