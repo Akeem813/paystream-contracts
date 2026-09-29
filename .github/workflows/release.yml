@@ -45,7 +45,7 @@ jobs:
           echo "hashes=$(base64 -w0 checksums.sha256)" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             target/wasm32-unknown-unknown/release/*.wasm
